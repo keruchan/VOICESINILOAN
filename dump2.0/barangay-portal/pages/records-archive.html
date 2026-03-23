@@ -1,0 +1,194 @@
+<div class="page" id="page-records-archive">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h2>Records Archive</h2>
+      <p>Organized repository of all resolved, closed, and transferred cases</p>
+    </div>
+    <div class="page-header-actions">
+      <button class="btn btn-outline btn-sm">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 8v3H2V2h3M8 2h3v3M5 8l6-6"/></svg>
+        Export CSV
+      </button>
+      <button class="btn btn-outline btn-sm">Print Report</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="kpi-grid mb20" style="grid-template-columns:repeat(5,1fr)">
+    <div class="kpi-card kpi-blue">
+      <div class="kpi-top"><div class="kpi-icon ki-blue"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="12" height="12" rx="1.5"/><path d="M5 7h6M5 9.5h4"/></svg></div></div>
+      <div class="kpi-val">312</div>
+      <div class="kpi-lbl">Total Archived</div>
+    </div>
+    <div class="kpi-card kpi-emerald">
+      <div class="kpi-top"><div class="kpi-icon ki-emerald"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 8.5l3 3 7-7"/></svg></div></div>
+      <div class="kpi-val">248</div>
+      <div class="kpi-lbl">Resolved</div>
+    </div>
+    <div class="kpi-card kpi-cyan">
+      <div class="kpi-top"><div class="kpi-icon ki-cyan"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="12" height="12" rx="1.5"/><path d="M2 6h12"/></svg></div></div>
+      <div class="kpi-val">38</div>
+      <div class="kpi-lbl">Closed</div>
+    </div>
+    <div class="kpi-card kpi-violet">
+      <div class="kpi-top"><div class="kpi-icon ki-violet"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2l6 6-6 6M2 8h12"/></svg></div></div>
+      <div class="kpi-val">18</div>
+      <div class="kpi-lbl">Transferred</div>
+    </div>
+    <div class="kpi-card kpi-amber">
+      <div class="kpi-top"><div class="kpi-icon ki-amber"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2v8M5 7l3 3 3-3"/><path d="M3 14h10"/></svg></div></div>
+      <div class="kpi-val">8</div>
+      <div class="kpi-lbl">Escalated</div>
+    </div>
+  </div>
+
+  <!-- Filters and Search -->
+  <div class="filter-bar">
+    <div class="input-group" style="flex:1;max-width:300px">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4"/><path d="M11 11l-2.5-2.5"/></svg>
+      <input type="search" placeholder="Search case no., name, incident…">
+    </div>
+    <select>
+      <option>All Resolution Types</option>
+      <option>Resolved — Mediation</option>
+      <option>Resolved — Agreement</option>
+      <option>Closed — No Action</option>
+      <option>Transferred — Another Barangay</option>
+      <option>Escalated — Police</option>
+      <option>Escalated — VAWC</option>
+      <option>Escalated — Municipality</option>
+    </select>
+    <select>
+      <option>All Incident Types</option>
+      <option>Noise Disturbance</option>
+      <option>Physical Altercation</option>
+      <option>Verbal Abuse</option>
+      <option>Property Damage</option>
+      <option>Domestic Dispute</option>
+      <option>VAWC</option>
+    </select>
+    <select>
+      <option>All Years</option>
+      <option>2026</option>
+      <option>2025</option>
+      <option>2024</option>
+      <option>2023</option>
+      <option>2022</option>
+    </select>
+    <select>
+      <option>All Quarters</option>
+      <option>Q1 (Jan–Mar)</option>
+      <option>Q2 (Apr–Jun)</option>
+      <option>Q3 (Jul–Sep)</option>
+      <option>Q4 (Oct–Dec)</option>
+    </select>
+    <button class="btn btn-outline btn-sm">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h9M4 7h5M6 10h2"/></svg>
+      Filter
+    </button>
+  </div>
+
+  <!-- Sort Bar -->
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;font-size:12px;color:var(--slate-500)">
+    <span>Sort by:</span>
+    <button class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px">Date Closed ↓</button>
+    <button class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px">Case No.</button>
+    <button class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px">Incident Type</button>
+    <span style="margin-left:auto">312 records found</span>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Case No.</th>
+            <th>Filed</th>
+            <th>Closed</th>
+            <th>Complainant</th>
+            <th>Respondent</th>
+            <th>Incident</th>
+            <th>Level</th>
+            <th>Resolution</th>
+            <th>Officer</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-mono">#2026-0037</td>
+            <td>Mar 17</td>
+            <td>Mar 17, 2026</td>
+            <td class="td-main">Nena Soriano</td>
+            <td>Elmer Soriano</td>
+            <td>Verbal Abuse</td>
+            <td><span class="chip chip-moderate">Moderate</span></td>
+            <td><span class="chip chip-emerald">Resolved — Mediation</span></td>
+            <td>Kgd. Ramos</td>
+            <td><button class="act-btn">View</button></td>
+          </tr>
+          <tr>
+            <td class="td-mono">#2026-0033</td>
+            <td>Mar 12</td>
+            <td>Mar 16, 2026</td>
+            <td class="td-main">Ben Pascual</td>
+            <td>Luz Pascual</td>
+            <td>Domestic Dispute</td>
+            <td><span class="chip chip-serious">Serious</span></td>
+            <td><span class="chip chip-vawc">Escalated — VAWC</span></td>
+            <td>Kgd. Santos</td>
+            <td><button class="act-btn">View</button></td>
+          </tr>
+          <tr>
+            <td class="td-mono">#2026-0028</td>
+            <td>Mar 5</td>
+            <td>Mar 14, 2026</td>
+            <td class="td-main">Cora Villanueva</td>
+            <td>Unknown</td>
+            <td>Property Damage</td>
+            <td><span class="chip chip-minor">Minor</span></td>
+            <td><span class="chip chip-slate">Closed — No Action</span></td>
+            <td>Kgd. Cruz</td>
+            <td><button class="act-btn">View</button></td>
+          </tr>
+          <tr>
+            <td class="td-mono">#2026-0020</td>
+            <td>Feb 20</td>
+            <td>Mar 1, 2026</td>
+            <td class="td-main">Tony Flores</td>
+            <td>Mang Eddie (Brgy. Sto. Niño)</td>
+            <td>Noise Disturbance</td>
+            <td><span class="chip chip-minor">Minor</span></td>
+            <td><span class="chip chip-blue">Transferred — Brgy. Sto. Niño</span></td>
+            <td>Kgd. Cruz</td>
+            <td><button class="act-btn">View</button></td>
+          </tr>
+          <tr>
+            <td class="td-mono">#2025-0214</td>
+            <td>Dec 10</td>
+            <td>Dec 22, 2025</td>
+            <td class="td-main">Ana Reyes</td>
+            <td>Roberto Reyes</td>
+            <td>Physical Altercation</td>
+            <td><span class="chip chip-serious">Serious</span></td>
+            <td><span class="chip chip-police">Escalated — Police</span></td>
+            <td>Kgd. Ramos</td>
+            <td><button class="act-btn">View</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer" style="display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:12px;color:var(--slate-400)">Showing 5 of 312 records · Page 1 of 63</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-outline btn-sm">← Prev</button>
+        <button class="btn btn-primary btn-sm">1</button>
+        <button class="btn btn-outline btn-sm">2</button>
+        <button class="btn btn-outline btn-sm">3</button>
+        <span style="padding:5px 8px;font-size:13px;color:var(--slate-400)">…</span>
+        <button class="btn btn-outline btn-sm">63</button>
+        <button class="btn btn-outline btn-sm">Next →</button>
+      </div>
+    </div>
+  </div>
+</div>

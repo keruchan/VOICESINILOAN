@@ -1,0 +1,95 @@
+<div class="page active" id="page-dashboard">
+  <div class="greeting">
+    <h1>Good morning, Juan 👋</h1>
+    <p>Monday, March 23, 2026 · Barangay San Roque, Quezon City</p>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card stat-blue">
+      <div class="stat-icon stat-icon-blue">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="1.5" width="12" height="13" rx="1.5"/><path d="M5 5.5h6M5 8h4"/></svg>
+      </div>
+      <div class="stat-num">3</div>
+      <div class="stat-lbl">Blotters Filed</div>
+    </div>
+    <div class="stat-card stat-amber">
+      <div class="stat-icon stat-icon-amber">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="12" height="12" rx="1.5"/><path d="M2 6h12M6 6v8"/></svg>
+      </div>
+      <div class="stat-num">2</div>
+      <div class="stat-lbl">Upcoming Mediation</div>
+    </div>
+    <div class="stat-card stat-red">
+      <div class="stat-icon stat-icon-red">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11" r=".5" fill="currentColor"/></svg>
+      </div>
+      <div class="stat-num">1</div>
+      <div class="stat-lbl">Assigned Cases</div>
+    </div>
+    <div class="stat-card stat-green">
+      <div class="stat-icon stat-icon-green">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 8.5l3 3 7-7"/></svg>
+      </div>
+      <div class="stat-num">2</div>
+      <div class="stat-lbl">Resolved Cases</div>
+    </div>
+  </div>
+
+  <div class="three-col">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Recent Activity</span>
+        <button class="action-btn" onclick="navigate(document.querySelector('[data-page=my-blotters]'))">View all</button>
+      </div>
+      <div class="card-body" style="padding:0">
+        <ul class="activity-list" style="padding: 0 16px">
+          <li class="activity-item">
+            <div class="activity-dot dot-amber"></div>
+            <div class="activity-text">Mediation scheduled for Case <strong>#2024-0087</strong> — Noise disturbance</div>
+            <div class="activity-time">2h ago</div>
+          </li>
+          <li class="activity-item">
+            <div class="activity-dot dot-red"></div>
+            <div class="activity-text">Sanction notice issued — <strong>2nd missed mediation</strong> on Case #2024-0061</div>
+            <div class="activity-time">1d ago</div>
+          </li>
+          <li class="activity-item">
+            <div class="activity-dot dot-blue"></div>
+            <div class="activity-text">Blotter <strong>#2024-0092</strong> submitted and is under review</div>
+            <div class="activity-time">3d ago</div>
+          </li>
+          <li class="activity-item">
+            <div class="activity-dot dot-green"></div>
+            <div class="activity-text">Case <strong>#2023-0045</strong> marked as resolved</div>
+            <div class="activity-time">2w ago</div>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-header"><span class="card-title">Upcoming Hearings</span></div>
+        <div class="card-body">
+          <ul class="upcoming-list">
+            <li class="upcoming-item">
+              <div class="upcoming-title">Mediation — Case #2024-0087</div>
+              <div class="upcoming-meta">Mar 27, 2026 · 9:00 AM · Barangay Hall</div>
+            </li>
+            <li class="upcoming-item amber">
+              <div class="upcoming-title">Hearing — Case #2024-0061</div>
+              <div class="upcoming-meta">Mar 30, 2026 · 2:00 PM · Barangay Hall</div>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div class="alert alert-red">
+        <svg class="alert-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11" r=".5" fill="currentColor"/></svg>
+        <div class="alert-text">
+          <strong>Action Required</strong>
+          <span>You have 1 unresolved sanction notice that requires compliance by April 5, 2026.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

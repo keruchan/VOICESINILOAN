@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barangay Blotter System — Community Portal</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ═══════════════════════════════════
+       SIDEBAR
+  ═══════════════════════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-badge">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><circle cx="5" cy="5" r="5"/></svg>
+        Community Portal
+      </div>
+      <div class="brand-name">Barangay<br>Blotter System</div>
+      <div class="brand-sub">Barangay San Roque, QC</div>
+    </div>
+
+    <div class="user-panel">
+      <div class="user-avatar">JD</div>
+      <div>
+        <div class="user-name">Juan Dela Cruz</div>
+        <div class="user-role">Community Member</div>
+      </div>
+    </div>
+
+    <nav>
+      <!-- Dashboard -->
+      <div class="nav-item active" data-page="dashboard" onclick="navigate(this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <rect x="1.5" y="1.5" width="5" height="5" rx="1"/>
+          <rect x="9.5" y="1.5" width="5" height="5" rx="1"/>
+          <rect x="1.5" y="9.5" width="5" height="5" rx="1"/>
+          <rect x="9.5" y="9.5" width="5" height="5" rx="1"/>
+        </svg>
+        <span class="nav-label">Dashboard</span>
+      </div>
+
+      <div class="nav-divider"></div>
+      <div class="nav-group-label">Reports</div>
+
+      <!-- My Blotters -->
+      <div class="nav-item" data-page="my-blotters" onclick="navigate(this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="1.5" width="12" height="13" rx="1.5"/>
+          <path d="M5 5.5h6M5 8h4"/>
+        </svg>
+        <span class="nav-label">My Blotters</span>
+        <span class="nav-badge badge-blue">3</span>
+      </div>
+
+      <!-- File a Report -->
+      <div class="nav-item" data-page="file-report" onclick="navigate(this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="8" cy="8" r="6"/>
+          <path d="M8 5.5v5M5.5 8h5"/>
+        </svg>
+        <span class="nav-label">File a Report</span>
+      </div>
+
+      <div class="nav-divider"></div>
+      <div class="nav-group-label">My Involvement</div>
+
+      <!-- Assigned Cases -->
+      <div class="nav-item" data-page="assigned-cases" onclick="navigate(this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="8" cy="5" r="2.5"/>
+          <path d="M2 14c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/>
+        </svg>
+        <span class="nav-label">Assigned Cases</span>
+        <span class="nav-badge badge-red">1</span>
+      </div>
+
+      <!-- Mediation Schedule -->
+      <div class="nav-item" data-page="mediation" onclick="navigate(this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <rect x="2" y="2" width="12" height="12" rx="1.5"/>
+          <path d="M2 6h12M6 6v8"/>
+        </svg>
+        <span class="nav-label">Mediation Schedule</span>
+        <span class="nav-badge badge-amber">2</span>
+      </div>
+
+      <div class="nav-divider"></div>
+      <div class="nav-group-label">Actions & Records</div>
+
+      <!-- Notices & Sanctions -->
+      <div class="nav-item" data-page="notices" onclick="navigate(this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M8 2l1.5 3h3l-2.5 2 1 3L8 8.5 5 10l1-3-2.5-2h3z"/>
+        </svg>
+        <span class="nav-label">Notices & Sanctions</span>
+        <span class="nav-badge badge-red">2</span>
+      </div>
+
+      <!-- Penalties & Compliance -->
+      <div class="nav-item" data-page="penalties" onclick="navigate(this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="8" cy="8" r="6"/>
+          <path d="M8 5v3.5l2 1.5"/>
+        </svg>
+        <span class="nav-label">Penalties & Compliance</span>
+      </div>
+
+      <!-- Case History -->
+      <div class="nav-item" data-page="history" onclick="navigate(this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M2 4h12M2 8h10M2 12h7"/>
+        </svg>
+        <span class="nav-label">Case History</span>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="footer-btn" onclick="navigate(document.querySelector('[data-page=profile]'))">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="8" cy="5.5" r="2.5"/>
+          <path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/>
+        </svg>
+        My Profile
+      </button>
+      <button class="footer-btn">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="8" cy="8" r="6"/>
+          <path d="M8 11v-4M8 5.5v-.5"/>
+        </svg>
+        Help & Guidelines
+      </button>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════════
+       MAIN CONTENT
+  ═══════════════════════════════════ -->
+  <div class="main">
+
+    <!-- Top Bar -->
+    <div class="topbar">
+      <span class="topbar-title" id="topbar-title">Dashboard</span>
+      <div class="topbar-actions">
+        <button class="notif-btn" onclick="navigate(document.querySelector('[data-page=notices]'))">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <path d="M8 2a5 5 0 0 1 5 5v2l1.5 2.5h-13L3 9V7a5 5 0 0 1 5-5z"/>
+            <path d="M6.5 13.5a1.5 1.5 0 0 0 3 0"/>
+          </svg>
+          <div class="notif-dot"></div>
+        </button>
+        <button class="btn btn-primary" onclick="openModal('modal-report')">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <path d="M6.5 2v9M2 6.5h9"/>
+          </svg>
+          File a Report
+        </button>
+      </div>
+    </div>
+
+    <!-- Page Content Area -->
+    <div class="content">
+
+      <!-- Each page is loaded from its own file -->
+      <!-- dashboard.html -->
+      <div data-include="pages/dashboard.html"></div>
+
+      <!-- my-blotters.html -->
+      <div data-include="pages/my-blotters.html"></div>
+
+      <!-- file-report.html -->
+      <div data-include="pages/file-report.html"></div>
+
+      <!-- assigned-cases.html -->
+      <div data-include="pages/assigned-cases.html"></div>
+
+      <!-- mediation.html -->
+      <div data-include="pages/mediation.html"></div>
+
+      <!-- notices.html -->
+      <div data-include="pages/notices.html"></div>
+
+      <!-- penalties.html -->
+      <div data-include="pages/penalties.html"></div>
+
+      <!-- history.html -->
+      <div data-include="pages/history.html"></div>
+
+      <!-- profile.html -->
+      <div data-include="pages/profile.html"></div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+
+<!-- ═══════════════════════════════════
+     MODAL: File a Report (Quick)
+═══════════════════════════════════ -->
+<div class="modal-overlay" id="modal-report">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">File a Report</span>
+      <button class="modal-close" onclick="closeModal('modal-report')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="report-type-grid">
+        <div class="report-type-card selected" onclick="selectModalType(this,'person')">
+          <div class="report-type-icon">👤</div>
+          <div class="report-type-title">Report a Person</div>
+          <div class="report-type-desc">Known violator or respondent</div>
+        </div>
+        <div class="report-type-card" onclick="selectModalType(this,'incident')">
+          <div class="report-type-icon">⚠️</div>
+          <div class="report-type-title">Incident Report</div>
+          <div class="report-type-desc">No identified violator</div>
+        </div>
+      </div>
+      <div id="modal-person-fields">
+        <div class="form-group">
+          <label>Respondent's Full Name <span class="required">*</span></label>
+          <input type="text" placeholder="Full name of the person being reported">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Incident Type <span class="required">*</span></label>
+          <select>
+            <option value="">Select type</option>
+            <option>Noise Disturbance</option>
+            <option>Physical Altercation</option>
+            <option>Verbal Abuse</option>
+            <option>Property Damage</option>
+            <option>Theft</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Date of Incident <span class="required">*</span></label>
+          <input type="date">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Location <span class="required">*</span></label>
+        <input type="text" placeholder="Where did this happen?">
+      </div>
+      <div class="form-group">
+        <label>Description <span class="required">*</span></label>
+        <textarea placeholder="Describe what happened in detail…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-report')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-report'); showToast('Report submitted! Your case number is #2026-0101.')">Submit Report</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════
+     DETAIL SIDE PANEL
+═══════════════════════════════════ -->
+<div class="detail-panel" id="detail-panel">
+  <div class="detail-header">
+    <button class="detail-back" onclick="closeDetail()">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <path d="M10 3L5 8l5 5"/>
+      </svg>
+    </button>
+    <span class="detail-title" id="detail-panel-title">Case Details</span>
+  </div>
+  <div class="detail-body" id="detail-panel-body"></div>
+</div>
+
+
+<!-- ═══════════════════════════════════
+     TOAST NOTIFICATION
+═══════════════════════════════════ -->
+<div id="toast" style="
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--gray-900); color:#fff; padding:10px 18px;
+  border-radius:var(--radius-md); font-size:13px; font-weight:400;
+  opacity:0; transition:all 0.22s; pointer-events:none; z-index:9999;
+  white-space:nowrap; box-shadow:var(--shadow-md);
+"></div>
+
+
+<!-- ═══════════════════════════════════
+     SCRIPTS
+═══════════════════════════════════ -->
+
+<!-- Page loader: fetches each partial HTML file and injects it -->
+<script>
+  (function loadPartials() {
+    const slots = document.querySelectorAll('[data-include]');
+    let loaded = 0;
+
+    slots.forEach(slot => {
+      const src = slot.getAttribute('data-include');
+      fetch(src)
+        .then(r => {
+          if (!r.ok) throw new Error('Failed to load ' + src);
+          return r.text();
+        })
+        .then(html => {
+          slot.outerHTML = html;
+          loaded++;
+          // Once all partials are injected, initialize the app
+          if (loaded === slots.length) {
+            const appScript = document.createElement('script');
+            appScript.src = 'js/app.js';
+            document.body.appendChild(appScript);
+          }
+        })
+        .catch(err => console.error(err));
+    });
+  })();
+</script>
+
+</body>
+</html>

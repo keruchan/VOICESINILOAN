@@ -1,0 +1,293 @@
+<div class="page" id="page-blotter-management">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h2>Blotter Management</h2>
+      <p>Review, process, and prescribe actions for all filed blotters</p>
+    </div>
+    <div class="page-header-actions">
+      <button class="btn btn-outline btn-sm">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 8v3H2V2h3M8 2h3v3M5 8l6-6"/></svg>
+        Export
+      </button>
+      <button class="btn btn-primary" onclick="openModal('modal-new-blotter')">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6.5 2v9M2 6.5h9"/></svg>
+        New Blotter Entry
+      </button>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-bar">
+    <div class="input-group" style="flex:1;max-width:280px">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4"/><path d="M11 11l-2.5-2.5"/></svg>
+      <input type="search" placeholder="Search case no., name, incident…">
+    </div>
+    <select>
+      <option>All Status</option>
+      <option>Pending Review</option>
+      <option>Active</option>
+      <option>Mediation Set</option>
+      <option>Escalated</option>
+      <option>Resolved</option>
+      <option>Closed</option>
+    </select>
+    <select>
+      <option>All Levels</option>
+      <option>Minor</option>
+      <option>Moderate</option>
+      <option>Serious</option>
+      <option>Critical</option>
+    </select>
+    <select>
+      <option>All Incident Types</option>
+      <option>Noise Disturbance</option>
+      <option>Physical Altercation</option>
+      <option>Verbal Abuse</option>
+      <option>Property Damage</option>
+      <option>Theft</option>
+      <option>Domestic Dispute</option>
+      <option>VAWC</option>
+      <option>Public Nuisance</option>
+      <option>Trespassing</option>
+    </select>
+    <select>
+      <option>All Actions</option>
+      <option>Document Only</option>
+      <option>For Mediation</option>
+      <option>Refer to Another Barangay</option>
+      <option>Refer to Police</option>
+      <option>Refer to VAWC</option>
+    </select>
+    <input type="date" style="width:auto;" title="Date From">
+    <input type="date" style="width:auto;" title="Date To">
+  </div>
+
+  <!-- Blotter Table -->
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Case No.</th>
+            <th>Filed</th>
+            <th>Complainant</th>
+            <th>Respondent</th>
+            <th>Incident</th>
+            <th>Level</th>
+            <th>Prescribed Action</th>
+            <th>Status</th>
+            <th>Officer</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-mono">#2026-0042</td>
+            <td>Mar 22, 2026</td>
+            <td class="td-main">Maria Santos</td>
+            <td>Pedro Reyes</td>
+            <td>Noise Disturbance</td>
+            <td><span class="chip chip-moderate">Moderate</span></td>
+            <td><span class="chip chip-mediation">Mediation</span></td>
+            <td><span class="chip chip-active">Active</span></td>
+            <td>Kgd. Cruz</td>
+            <td><button class="act-btn" onclick="openBlotterDetail('2026-0042')">Open</button></td>
+          </tr>
+          <tr>
+            <td class="td-mono">#2026-0041</td>
+            <td>Mar 21, 2026</td>
+            <td class="td-main">Jose Dela Cruz</td>
+            <td>Ana Villanueva</td>
+            <td>Physical Altercation</td>
+            <td><span class="chip chip-serious">Serious</span></td>
+            <td><span class="chip chip-police">Refer to Police</span></td>
+            <td><span class="chip chip-escalated">Escalated</span></td>
+            <td>Kgd. Ramos</td>
+            <td><button class="act-btn" onclick="openBlotterDetail('2026-0041')">Open</button></td>
+          </tr>
+          <tr>
+            <td class="td-mono">#2026-0040</td>
+            <td>Mar 20, 2026</td>
+            <td class="td-main">Rosa Mendoza</td>
+            <td>Unknown</td>
+            <td>Property Damage</td>
+            <td><span class="chip chip-minor">Minor</span></td>
+            <td><span class="chip chip-slate">Document Only</span></td>
+            <td><span class="chip chip-pending">Pending Review</span></td>
+            <td>—</td>
+            <td><button class="act-btn" onclick="openBlotterDetail('2026-0040')">Open</button></td>
+          </tr>
+          <tr>
+            <td class="td-mono">#2026-0039</td>
+            <td>Mar 19, 2026</td>
+            <td class="td-main">Lina Bautista</td>
+            <td>Ramon Bautista</td>
+            <td>Domestic Dispute / VAWC</td>
+            <td><span class="chip chip-critical">Critical</span></td>
+            <td><span class="chip chip-vawc">Refer to VAWC</span></td>
+            <td><span class="chip chip-escalated">Escalated</span></td>
+            <td>Kgd. Santos</td>
+            <td><button class="act-btn" onclick="openBlotterDetail('2026-0039')">Open</button></td>
+          </tr>
+          <tr>
+            <td class="td-mono">#2026-0038</td>
+            <td>Mar 18, 2026</td>
+            <td class="td-main">Carlo Manalo</td>
+            <td>Brgy. Sta. Mesa resident</td>
+            <td>Trespassing</td>
+            <td><span class="chip chip-minor">Minor</span></td>
+            <td><span class="chip chip-blue">Refer to Another Barangay</span></td>
+            <td><span class="chip chip-closed">Transferred</span></td>
+            <td>Kgd. Cruz</td>
+            <td><button class="act-btn" onclick="openBlotterDetail('2026-0038')">Open</button></td>
+          </tr>
+          <tr>
+            <td class="td-mono">#2026-0037</td>
+            <td>Mar 17, 2026</td>
+            <td class="td-main">Nena Soriano</td>
+            <td>Elmer Soriano</td>
+            <td>Verbal Abuse</td>
+            <td><span class="chip chip-moderate">Moderate</span></td>
+            <td><span class="chip chip-mediation">Mediation</span></td>
+            <td><span class="chip chip-resolved">Resolved</span></td>
+            <td>Kgd. Ramos</td>
+            <td><button class="act-btn" onclick="openBlotterDetail('2026-0037')">Open</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer" style="display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:12px;color:var(--slate-400)">Showing 6 of 42 blotters</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-outline btn-sm">← Prev</button>
+        <button class="btn btn-outline btn-sm" style="background:var(--blue-600);color:#fff;border-color:var(--blue-600)">1</button>
+        <button class="btn btn-outline btn-sm">2</button>
+        <button class="btn btn-outline btn-sm">3</button>
+        <button class="btn btn-outline btn-sm">Next →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: New Blotter Entry ═══ -->
+<div class="modal-overlay" id="modal-new-blotter">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">New Blotter Entry</span>
+      <button class="modal-close" onclick="closeModal('modal-new-blotter')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row3">
+        <div class="form-group">
+          <label>Case Number <span class="req">*</span></label>
+          <input type="text" value="#2026-0043" readonly style="background:var(--slate-50)">
+        </div>
+        <div class="form-group">
+          <label>Date Filed <span class="req">*</span></label>
+          <input type="date" value="2026-03-23">
+        </div>
+        <div class="form-group">
+          <label>Time Filed</label>
+          <input type="time">
+        </div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--slate-400);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--slate-100)">Complainant Information</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Full Name <span class="req">*</span></label>
+          <input type="text" placeholder="Last, First Middle">
+        </div>
+        <div class="form-group">
+          <label>Contact Number</label>
+          <input type="text" placeholder="09XX-XXX-XXXX">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Address</label>
+        <input type="text" placeholder="House/Lot No., Street, Barangay">
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--slate-400);text-transform:uppercase;letter-spacing:0.07em;margin:14px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--slate-100)">Respondent Information</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Full Name <span class="req">*</span></label>
+          <input type="text" placeholder="Last, First Middle (or 'Unknown')">
+        </div>
+        <div class="form-group">
+          <label>Contact Number</label>
+          <input type="text" placeholder="09XX-XXX-XXXX">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Address</label>
+        <input type="text" placeholder="House/Lot No., Street, Barangay">
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--slate-400);text-transform:uppercase;letter-spacing:0.07em;margin:14px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--slate-100)">Incident Details</div>
+      <div class="form-row3">
+        <div class="form-group">
+          <label>Incident Type <span class="req">*</span></label>
+          <select>
+            <option value="">Select type</option>
+            <option>Noise Disturbance</option>
+            <option>Physical Altercation</option>
+            <option>Verbal Abuse</option>
+            <option>Property Damage</option>
+            <option>Theft / Robbery</option>
+            <option>Domestic Dispute</option>
+            <option>VAWC</option>
+            <option>Public Nuisance</option>
+            <option>Trespassing</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Violation Level <span class="req">*</span></label>
+          <select id="modal-violation-level" onchange="updatePrescriptiveActions()">
+            <option value="">Select level</option>
+            <option value="minor">Minor</option>
+            <option value="moderate">Moderate</option>
+            <option value="serious">Serious</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Assigned Officer</label>
+          <select>
+            <option>Unassigned</option>
+            <option>Kgd. Cruz</option>
+            <option>Kgd. Ramos</option>
+            <option>Kgd. Santos</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date of Incident <span class="req">*</span></label>
+          <input type="date">
+        </div>
+        <div class="form-group">
+          <label>Location of Incident</label>
+          <input type="text" placeholder="Specific street or landmark">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Incident Narrative <span class="req">*</span></label>
+        <textarea placeholder="Detailed account of the incident…" style="min-height:90px"></textarea>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--slate-400);text-transform:uppercase;letter-spacing:0.07em;margin:14px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--slate-100)">Prescriptive Action</div>
+      <div id="prescriptive-actions-container">
+        <div style="font-size:13px;color:var(--slate-400);padding:12px;text-align:center;background:var(--slate-50);border-radius:var(--r-md)">
+          Select a violation level above to see recommended actions
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-new-blotter')">Cancel</button>
+      <button class="btn btn-outline">Save as Draft</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-new-blotter');showToast('Blotter #2026-0043 successfully filed.')">File Blotter</button>
+    </div>
+  </div>
+</div>

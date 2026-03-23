@@ -1,0 +1,203 @@
+<div class="page" id="page-violator-monitor">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h2>Violator Monitor</h2>
+      <p>Track repeat offenders, recidivism risk, and behavioral patterns</p>
+    </div>
+    <div class="page-header-actions">
+      <button class="btn btn-outline btn-sm">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 8v3H2V2h3M8 2h3v3M5 8l6-6"/></svg>
+        Export Report
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary KPIs -->
+  <div class="kpi-grid mb20" style="grid-template-columns:repeat(4,1fr)">
+    <div class="kpi-card kpi-rose">
+      <div class="kpi-top">
+        <div class="kpi-icon ki-rose">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M9 3L16 15H2L9 3z"/><path d="M9 8v4"/><circle cx="9" cy="13.5" r=".5" fill="currentColor"/></svg>
+        </div>
+        <span class="kpi-trend trend-up">↑ 2</span>
+      </div>
+      <div class="kpi-val">4</div>
+      <div class="kpi-lbl">Critical Risk Violators</div>
+    </div>
+    <div class="kpi-card kpi-amber">
+      <div class="kpi-top">
+        <div class="kpi-icon ki-amber">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="6" r="3"/><path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+        </div>
+        <span class="kpi-trend trend-flat">—</span>
+      </div>
+      <div class="kpi-val">11</div>
+      <div class="kpi-lbl">Repeat Offenders</div>
+    </div>
+    <div class="kpi-card kpi-violet">
+      <div class="kpi-top">
+        <div class="kpi-icon ki-violet">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="9" r="6"/><path d="M9 6v3.5l2 2"/></svg>
+        </div>
+        <span class="kpi-trend trend-down">↓ 1</span>
+      </div>
+      <div class="kpi-val">7</div>
+      <div class="kpi-lbl">Missed Mediations (Active)</div>
+    </div>
+    <div class="kpi-card kpi-emerald">
+      <div class="kpi-top">
+        <div class="kpi-icon ki-emerald">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 9.5l3.5 3.5 7-7"/></svg>
+        </div>
+        <span class="kpi-trend trend-up">↑ 3</span>
+      </div>
+      <div class="kpi-val">23</div>
+      <div class="kpi-lbl">Compliant This Month</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <div class="tab-item active" onclick="switchViolatorTab(this,'tab-all')">All Violators</div>
+    <div class="tab-item" onclick="switchViolatorTab(this,'tab-critical')">🔴 Critical Risk</div>
+    <div class="tab-item" onclick="switchViolatorTab(this,'tab-repeat')">🔄 Repeat Offenders</div>
+    <div class="tab-item" onclick="switchViolatorTab(this,'tab-pending')">⏳ Pending Compliance</div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="input-group" style="flex:1;max-width:280px">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4"/><path d="M11 11l-2.5-2.5"/></svg>
+      <input type="search" placeholder="Search violator name…">
+    </div>
+    <select>
+      <option>All Risk Levels</option>
+      <option>Critical</option>
+      <option>High</option>
+      <option>Medium</option>
+      <option>Low</option>
+    </select>
+    <select>
+      <option>All Incident Types</option>
+      <option>Noise Disturbance</option>
+      <option>Physical Altercation</option>
+      <option>Domestic Dispute</option>
+      <option>VAWC</option>
+      <option>Property Damage</option>
+    </select>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Violator</th>
+            <th>Address</th>
+            <th>Total Cases</th>
+            <th>Recent Offense</th>
+            <th>Missed Hearings</th>
+            <th>Unpaid Fines</th>
+            <th>Risk Score</th>
+            <th>Risk Level</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="td-main">Ramon Bautista</div>
+              <div style="font-size:11px;color:var(--slate-400)">ID: VIO-2024-001</div>
+            </td>
+            <td>123 Mabini St.</td>
+            <td style="text-align:center;font-weight:700;color:var(--rose-600)">6</td>
+            <td>Domestic / VAWC<br><span style="font-size:11px;color:var(--slate-400)">Mar 19, 2026</span></td>
+            <td style="text-align:center;font-weight:700;color:var(--rose-600)">3</td>
+            <td style="font-weight:700;color:var(--rose-600)">₱1,500</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="flex:1;height:6px;background:var(--slate-100);border-radius:10px;overflow:hidden">
+                  <div style="width:92%;height:100%;background:var(--rose-400);border-radius:10px"></div>
+                </div>
+                <span style="font-size:11px;font-weight:700;color:var(--rose-600)">92</span>
+              </div>
+            </td>
+            <td><span class="risk-badge risk-critical">● Critical</span></td>
+            <td><button class="act-btn" onclick="openViolatorDetail('bautista')">Profile</button></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="td-main">Eduardo Ramos</div>
+              <div style="font-size:11px;color:var(--slate-400)">ID: VIO-2024-008</div>
+            </td>
+            <td>45 Rizal Ave.</td>
+            <td style="text-align:center;font-weight:700;color:var(--amber-600)">4</td>
+            <td>Physical Altercation<br><span style="font-size:11px;color:var(--slate-400)">Mar 15, 2026</span></td>
+            <td style="text-align:center;font-weight:700;color:var(--amber-600)">2</td>
+            <td style="font-weight:700;color:var(--amber-600)">₱700</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="flex:1;height:6px;background:var(--slate-100);border-radius:10px;overflow:hidden">
+                  <div style="width:74%;height:100%;background:var(--amber-400);border-radius:10px"></div>
+                </div>
+                <span style="font-size:11px;font-weight:700;color:var(--amber-600)">74</span>
+              </div>
+            </td>
+            <td><span class="risk-badge risk-high">● High</span></td>
+            <td><button class="act-btn" onclick="openViolatorDetail('ramos')">Profile</button></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="td-main">Sofia Castillo</div>
+              <div style="font-size:11px;color:var(--slate-400)">ID: VIO-2025-003</div>
+            </td>
+            <td>78 Luna St.</td>
+            <td style="text-align:center;font-weight:700;color:var(--amber-600)">3</td>
+            <td>Noise Disturbance<br><span style="font-size:11px;color:var(--slate-400)">Mar 10, 2026</span></td>
+            <td style="text-align:center">1</td>
+            <td style="color:var(--slate-400)">₱0</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="flex:1;height:6px;background:var(--slate-100);border-radius:10px;overflow:hidden">
+                  <div style="width:55%;height:100%;background:var(--amber-200);border-radius:10px"></div>
+                </div>
+                <span style="font-size:11px;font-weight:700;color:var(--amber-600)">55</span>
+              </div>
+            </td>
+            <td><span class="risk-badge risk-medium">● Medium</span></td>
+            <td><button class="act-btn">Profile</button></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="td-main">Mario Torres</div>
+              <div style="font-size:11px;color:var(--slate-400)">ID: VIO-2025-011</div>
+            </td>
+            <td>12 Del Pilar St.</td>
+            <td style="text-align:center">2</td>
+            <td>Verbal Abuse<br><span style="font-size:11px;color:var(--slate-400)">Feb 28, 2026</span></td>
+            <td style="text-align:center">0</td>
+            <td style="color:var(--slate-400)">₱0</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="flex:1;height:6px;background:var(--slate-100);border-radius:10px;overflow:hidden">
+                  <div style="width:28%;height:100%;background:var(--emerald-400);border-radius:10px"></div>
+                </div>
+                <span style="font-size:11px;font-weight:700;color:var(--emerald-600)">28</span>
+              </div>
+            </td>
+            <td><span class="risk-badge risk-low">● Low</span></td>
+            <td><button class="act-btn">Profile</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer" style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12px;color:var(--slate-400)">Showing 4 of 38 violators</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-outline btn-sm">← Prev</button>
+        <button class="btn btn-primary btn-sm">1</button>
+        <button class="btn btn-outline btn-sm">2</button>
+        <button class="btn btn-outline btn-sm">Next →</button>
+      </div>
+    </div>
+  </div>
+</div>

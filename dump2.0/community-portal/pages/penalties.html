@@ -1,0 +1,96 @@
+<div class="page" id="page-penalties">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h2>Penalties & Compliance</h2>
+      <p>Track fines, orders, and your compliance status</p>
+    </div>
+  </div>
+
+  <div class="stats-grid" style="grid-template-columns: repeat(3,1fr);">
+    <div class="stat-card stat-red">
+      <div class="stat-icon stat-icon-red">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2v8M5 7l3 3 3-3"/><path d="M3 14h10"/></svg>
+      </div>
+      <div class="stat-num">₱500</div>
+      <div class="stat-lbl">Total Pending Fines</div>
+    </div>
+    <div class="stat-card stat-amber">
+      <div class="stat-icon stat-icon-amber">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5l2 1.5"/></svg>
+      </div>
+      <div class="stat-num">0 hrs</div>
+      <div class="stat-lbl">Community Service Due</div>
+    </div>
+    <div class="stat-card stat-green">
+      <div class="stat-icon stat-icon-green">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 8.5l3 3 7-7"/></svg>
+      </div>
+      <div class="stat-num">₱0</div>
+      <div class="stat-lbl">Total Paid</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Penalty Records</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Ref No.</th>
+            <th>Case</th>
+            <th>Reason</th>
+            <th>Amount</th>
+            <th>Issued</th>
+            <th>Due Date</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>PEN-2026-001</strong></td>
+            <td>#2024-0061</td>
+            <td>2nd missed mediation hearing</td>
+            <td><strong>₱500.00</strong></td>
+            <td>Mar 22, 2026</td>
+            <td>Apr 5, 2026</td>
+            <td><span class="chip chip-overdue">Overdue Risk</span></td>
+            <td><button class="btn btn-primary btn-sm" onclick="showToast('Payment instructions sent to your registered email.')">Pay Now</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="card-header"><span class="card-title">Escalation Risk Tracker</span></div>
+    <div class="card-body">
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:28px; height:28px; border-radius:50%; background:var(--green-50); color:var(--green-600); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; flex-shrink:0;">1</div>
+          <div style="flex:1">
+            <div style="font-size:13px; font-weight:500; color:var(--gray-900)">1st missed mediation</div>
+            <div style="font-size:11px; color:var(--gray-400)">Written warning issued · No penalty</div>
+          </div>
+          <span class="chip chip-done">Occurred</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:28px; height:28px; border-radius:50%; background:var(--amber-50); color:var(--amber-600); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; flex-shrink:0;">2</div>
+          <div style="flex:1">
+            <div style="font-size:13px; font-weight:500; color:var(--gray-900)">2nd missed mediation</div>
+            <div style="font-size:11px; color:var(--gray-400)">Final warning + ₱500 fine</div>
+          </div>
+          <span class="chip chip-issued">Current</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:28px; height:28px; border-radius:50%; background:var(--red-50); color:var(--red-600); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; flex-shrink:0;">3</div>
+          <div style="flex:1">
+            <div style="font-size:13px; font-weight:500; color:var(--gray-900)">3rd missed mediation</div>
+            <div style="font-size:11px; color:var(--gray-400)">Escalation to Municipality + additional fines</div>
+          </div>
+          <span class="chip chip-closed">Pending</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,156 @@
+<div class="page active" id="page-dashboard">
+
+  <!-- KPI Row -->
+  <div class="kpi-grid">
+    <div class="kpi-card kpi-blue">
+      <div class="kpi-top">
+        <div class="kpi-icon ki-blue">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="2" width="14" height="14" rx="2"/><path d="M5 7h8M5 10h6"/></svg>
+        </div>
+        <span class="kpi-trend trend-up">↑ 12%</span>
+      </div>
+      <div class="kpi-val" id="kpi-total-blotters">0</div>
+      <div class="kpi-lbl">Total Blotters (This Month)</div>
+    </div>
+    <div class="kpi-card kpi-rose">
+      <div class="kpi-top">
+        <div class="kpi-icon ki-rose">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="6" r="3"/><path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+        </div>
+        <span class="kpi-trend trend-up">↑ 3</span>
+      </div>
+      <div class="kpi-val" id="kpi-active-violators">0</div>
+      <div class="kpi-lbl">Active Violators</div>
+    </div>
+    <div class="kpi-card kpi-amber">
+      <div class="kpi-top">
+        <div class="kpi-icon ki-amber">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="2" width="14" height="14" rx="2"/><path d="M2 7h14M7 7v9"/></svg>
+        </div>
+        <span class="kpi-trend trend-flat">0</span>
+      </div>
+      <div class="kpi-val" id="kpi-pending-mediation">0</div>
+      <div class="kpi-lbl">Pending Mediation</div>
+    </div>
+    <div class="kpi-card kpi-emerald">
+      <div class="kpi-top">
+        <div class="kpi-icon ki-emerald">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 9.5l3.5 3.5 7-7"/></svg>
+        </div>
+        <span class="kpi-trend trend-up">↑ 8%</span>
+      </div>
+      <div class="kpi-val" id="kpi-resolution-rate">0%</div>
+      <div class="kpi-lbl">Resolution Rate</div>
+    </div>
+  </div>
+
+  <!-- Charts Row 1 -->
+  <div class="g32 mb20">
+    <!-- Monthly Blotter Trend -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Monthly Blotter Trend</div>
+          <div class="card-subtitle">Filed vs Resolved — Last 12 months</div>
+        </div>
+        <select style="width:auto; font-size:12px; padding:4px 8px">
+          <option>This Year</option>
+          <option>Last Year</option>
+        </select>
+      </div>
+      <div class="card-body">
+        <div class="chart-area" style="height:220px">
+          <canvas id="chart-trend" style="width:100%;height:100%"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Incident Type Breakdown -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Incident Breakdown</div>
+          <div class="card-subtitle">By type this month</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="chart-area" style="height:220px">
+          <canvas id="chart-types" style="width:100%;height:100%"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row 2 -->
+  <div class="g3 mb20">
+    <!-- Violation Hotspots -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Violation Hotspots</div>
+        <div class="card-subtitle" style="font-size:11px;color:var(--slate-400)">Top locations</div>
+      </div>
+      <div class="card-body" style="padding:14px 18px">
+        <div id="hotspot-list"></div>
+      </div>
+    </div>
+
+    <!-- Violation Level Distribution -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Severity Distribution</div>
+      </div>
+      <div class="card-body">
+        <div class="chart-area" style="height:180px">
+          <canvas id="chart-severity" style="width:100%;height:100%"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Forecasting Panel -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🔮 Forecasts</div>
+        <div class="card-subtitle" style="font-size:11px;color:var(--slate-400)">AI-assisted predictions</div>
+      </div>
+      <div class="card-body">
+        <div style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;color:var(--slate-500);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Repeat Violation Risk</div>
+          <div id="forecast-list"></div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--slate-500);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">High-Risk Locations (Next 30 days)</div>
+          <div id="forecast-locations"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Row -->
+  <div class="g21">
+    <!-- Recent Blotters -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Recent Blotters</div>
+        <button class="act-btn" onclick="navigate(document.querySelector('[data-page=blotter-management]'))">View all</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Case No.</th><th>Complainant</th><th>Violation</th><th>Level</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="recent-blotters-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Upcoming Mediation -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Upcoming Mediation</div>
+        <button class="act-btn" onclick="navigate(document.querySelector('[data-page=mediation]'))">View all</button>
+      </div>
+      <div class="card-body" style="padding:0 18px">
+        <div id="upcoming-mediation-list"></div>
+      </div>
+    </div>
+  </div>
+
+</div>

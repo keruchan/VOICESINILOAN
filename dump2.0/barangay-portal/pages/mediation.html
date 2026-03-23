@@ -1,0 +1,353 @@
+<div class="page" id="page-mediation">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h2>Mediation Management</h2>
+      <p>Schedule hearings, send notifications, and record outcomes</p>
+    </div>
+    <div class="page-header-actions">
+      <button class="btn btn-outline btn-sm" onclick="openModal('modal-bulk-notify')">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6.5 1a4 4 0 0 1 4 4v2l1.5 2H1L2.5 7V5a4 4 0 0 1 4-4z"/><path d="M5 11.5a1.5 1.5 0 0 0 3 0"/></svg>
+        Send Bulk Notification
+      </button>
+      <button class="btn btn-primary" onclick="openModal('modal-schedule-mediation')">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6.5 2v9M2 6.5h9"/></svg>
+        Schedule Mediation
+      </button>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid mb20" style="grid-template-columns:repeat(4,1fr)">
+    <div class="kpi-card kpi-blue">
+      <div class="kpi-top"><div class="kpi-icon ki-blue"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="12" height="12" rx="1.5"/><path d="M2 6h12M6 6v8"/></svg></div></div>
+      <div class="kpi-val">8</div>
+      <div class="kpi-lbl">Scheduled This Week</div>
+    </div>
+    <div class="kpi-card kpi-amber">
+      <div class="kpi-top"><div class="kpi-icon ki-amber"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5l2 1.5"/></svg></div></div>
+      <div class="kpi-val">3</div>
+      <div class="kpi-lbl">Awaiting Confirmation</div>
+    </div>
+    <div class="kpi-card kpi-rose">
+      <div class="kpi-top"><div class="kpi-icon ki-rose"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M10 6L6 10M6 6l4 4"/></svg></div></div>
+      <div class="kpi-val">5</div>
+      <div class="kpi-lbl">Missed This Month</div>
+    </div>
+    <div class="kpi-card kpi-emerald">
+      <div class="kpi-top"><div class="kpi-icon ki-emerald"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 8.5l3 3 5-5"/></svg></div></div>
+      <div class="kpi-val">18</div>
+      <div class="kpi-lbl">Settled This Month</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <div class="tab-item active" onclick="switchMedTab(this,'med-upcoming')">Upcoming</div>
+    <div class="tab-item" onclick="switchMedTab(this,'med-pending')">Pending Confirmation</div>
+    <div class="tab-item" onclick="switchMedTab(this,'med-past')">Past Hearings</div>
+    <div class="tab-item" onclick="switchMedTab(this,'med-notifications')">Notifications Log</div>
+  </div>
+
+  <!-- Upcoming Tab -->
+  <div id="med-upcoming">
+    <div class="filter-bar">
+      <div class="input-group" style="flex:1;max-width:260px">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4"/><path d="M11 11l-2.5-2.5"/></svg>
+        <input type="search" placeholder="Search case or party name…">
+      </div>
+      <input type="date" style="width:auto">
+      <select style="width:auto;min-width:140px">
+        <option>All Officers</option>
+        <option>Kgd. Cruz</option>
+        <option>Kgd. Ramos</option>
+        <option>Kgd. Santos</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Case No.</th>
+              <th>Parties</th>
+              <th>Incident</th>
+              <th>Date & Time</th>
+              <th>Venue / Room</th>
+              <th>Mediator</th>
+              <th>Notifications</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-mono">#2026-0042</td>
+              <td>
+                <div class="td-main">Maria Santos</div>
+                <div style="font-size:11px;color:var(--slate-400)">vs. Pedro Reyes</div>
+              </td>
+              <td>Noise Disturbance</td>
+              <td><strong>Mar 25, 2026</strong><br><span style="font-size:11px;color:var(--slate-400)">9:00 AM</span></td>
+              <td>Barangay Hall, Room 2</td>
+              <td>Kgd. Cruz</td>
+              <td>
+                <div style="display:flex;gap:4px;flex-wrap:wrap">
+                  <span class="chip chip-emerald" style="font-size:10px">✓ Complainant</span>
+                  <span class="chip chip-amber" style="font-size:10px">⏳ Respondent</span>
+                </div>
+              </td>
+              <td><span class="chip chip-active">Confirmed</span></td>
+              <td>
+                <div style="display:flex;gap:4px">
+                  <button class="act-btn" onclick="openModal('modal-schedule-mediation')">Edit</button>
+                  <button class="act-btn" onclick="showToast('Reminder sent to both parties.')">🔔 Remind</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="td-mono">#2026-0039</td>
+              <td>
+                <div class="td-main">Lina Bautista</div>
+                <div style="font-size:11px;color:var(--slate-400)">vs. Ramon Bautista</div>
+              </td>
+              <td>Domestic / VAWC</td>
+              <td><strong>Mar 27, 2026</strong><br><span style="font-size:11px;color:var(--slate-400)">2:00 PM</span></td>
+              <td>Barangay Hall, Room 1</td>
+              <td>Kgd. Santos</td>
+              <td>
+                <div style="display:flex;gap:4px;flex-wrap:wrap">
+                  <span class="chip chip-amber" style="font-size:10px">⏳ Complainant</span>
+                  <span class="chip chip-rose" style="font-size:10px">✗ Respondent</span>
+                </div>
+              </td>
+              <td><span class="chip chip-amber chip-pending">Pending</span></td>
+              <td>
+                <div style="display:flex;gap:4px">
+                  <button class="act-btn">Edit</button>
+                  <button class="act-btn" onclick="showToast('Reminder sent.')">🔔 Remind</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="td-mono">#2026-0035</td>
+              <td>
+                <div class="td-main">Carlo Reyes</div>
+                <div style="font-size:11px;color:var(--slate-400)">vs. Nena Soriano</div>
+              </td>
+              <td>Property Dispute</td>
+              <td><strong>Mar 28, 2026</strong><br><span style="font-size:11px;color:var(--slate-400)">10:30 AM</span></td>
+              <td>Barangay Hall, Room 2</td>
+              <td>Kgd. Ramos</td>
+              <td>
+                <div style="display:flex;gap:4px;flex-wrap:wrap">
+                  <span class="chip chip-emerald" style="font-size:10px">✓ Complainant</span>
+                  <span class="chip chip-emerald" style="font-size:10px">✓ Respondent</span>
+                </div>
+              </td>
+              <td><span class="chip chip-active">Confirmed</span></td>
+              <td>
+                <div style="display:flex;gap:4px">
+                  <button class="act-btn">Edit</button>
+                  <button class="act-btn" onclick="openModal('modal-record-outcome')">📝 Outcome</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Past Hearings (hidden by default) -->
+  <div id="med-past" style="display:none">
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Case No.</th><th>Parties</th><th>Date</th><th>Mediator</th><th>Attendance</th><th>Outcome</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-mono">#2026-0037</td>
+              <td><div class="td-main">Nena Soriano</div><div style="font-size:11px;color:var(--slate-400)">vs. Elmer Soriano</div></td>
+              <td>Mar 17, 2026</td>
+              <td>Kgd. Ramos</td>
+              <td><span class="chip chip-emerald">Both Present</span></td>
+              <td>Settled — written agreement signed</td>
+              <td><span class="chip chip-resolved">Resolved</span></td>
+              <td><button class="act-btn">View Record</button></td>
+            </tr>
+            <tr>
+              <td class="td-mono">#2026-0031</td>
+              <td><div class="td-main">Jose Lim</div><div style="font-size:11px;color:var(--slate-400)">vs. Ana Flores</div></td>
+              <td>Mar 10, 2026</td>
+              <td>Kgd. Cruz</td>
+              <td><span class="chip chip-amber">Complainant Only</span></td>
+              <td>Rescheduled — respondent absent (1st miss)</td>
+              <td><span class="chip chip-pending">Rescheduled</span></td>
+              <td><button class="act-btn">View Record</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notifications Log (hidden) -->
+  <div id="med-notifications" style="display:none">
+    <div class="card">
+      <div class="card-body" style="padding:0 18px">
+        <div class="notif-item">
+          <div class="notif-ic" style="background:var(--blue-50);color:var(--blue-600)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2a5 5 0 0 1 5 5v2l1.5 2.5h-13L3 9V7a5 5 0 0 1 5-5z"/><path d="M6.5 13.5a1.5 1.5 0 0 0 3 0"/></svg>
+          </div>
+          <div style="flex:1">
+            <div class="notif-text"><strong>SMS Reminder Sent</strong> — Pedro Reyes (Respondent, Case #2026-0042). Mediation on Mar 25 at 9:00 AM.</div>
+            <div class="notif-time" style="margin-top:3px">Today, 8:00 AM · Auto-sent (48hr reminder)</div>
+          </div>
+        </div>
+        <div class="notif-item">
+          <div class="notif-ic" style="background:var(--rose-50);color:var(--rose-600)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11" r=".5" fill="currentColor"/></svg>
+          </div>
+          <div style="flex:1">
+            <div class="notif-text"><strong>Missed Hearing Notice Issued</strong> — Ramon Bautista (Case #2026-0039). 2nd missed mediation. Penalty auto-triggered.</div>
+            <div class="notif-time" style="margin-top:3px">Yesterday, 3:10 PM · System-generated</div>
+          </div>
+        </div>
+        <div class="notif-item">
+          <div class="notif-ic" style="background:var(--emerald-50);color:var(--emerald-600)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 8.5l3 3 7-7"/></svg>
+          </div>
+          <div style="flex:1">
+            <div class="notif-text"><strong>Mediation Confirmed</strong> — Both parties in Case #2026-0035 confirmed attendance for Mar 28.</div>
+            <div class="notif-time" style="margin-top:3px">Mar 21, 2026, 10:42 AM</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pending Confirmation (hidden) -->
+  <div id="med-pending" style="display:none">
+    <div class="alert alert-amber"><svg class="alert-icon-amber" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11" r=".5" fill="currentColor"/></svg><div class="alert-text"><strong>3 hearings need confirmation</strong><span>Parties have not yet responded to their mediation summons. Consider sending a follow-up reminder.</span></div></div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Case No.</th><th>Parties</th><th>Hearing Date</th><th>Sent On</th><th>Awaiting</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="td-mono">#2026-0039</td>
+              <td><div class="td-main">Lina vs. Ramon Bautista</div></td>
+              <td>Mar 27, 2026</td>
+              <td>Mar 20, 2026</td>
+              <td><span class="chip chip-rose">Respondent</span></td>
+              <td><button class="act-btn" onclick="showToast('Follow-up reminder sent.')">Resend Notice</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal: Schedule Mediation -->
+<div class="modal-overlay" id="modal-schedule-mediation">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Schedule Mediation</span>
+      <button class="modal-close" onclick="closeModal('modal-schedule-mediation')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Case Number <span class="req">*</span></label>
+        <select><option>— Select case —</option><option>#2026-0042</option><option>#2026-0041</option><option>#2026-0040</option></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Hearing Date <span class="req">*</span></label>
+          <input type="date">
+        </div>
+        <div class="form-group">
+          <label>Time <span class="req">*</span></label>
+          <input type="time">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Venue</label>
+          <input type="text" value="Barangay Hall" placeholder="Room or location">
+        </div>
+        <div class="form-group">
+          <label>Assigned Mediator</label>
+          <select><option>Kgd. Cruz</option><option>Kgd. Ramos</option><option>Kgd. Santos</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notification Method</label>
+        <div style="display:flex;gap:12px;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:6px;font-weight:400;color:var(--slate-700)"><input type="checkbox" checked style="width:auto"> SMS</label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:400;color:var(--slate-700)"><input type="checkbox" checked style="width:auto"> In-app</label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:400;color:var(--slate-700)"><input type="checkbox" style="width:auto"> Print Notice</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes (Optional)</label>
+        <textarea placeholder="Special instructions or requirements…" style="min-height:60px"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-schedule-mediation')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-schedule-mediation');showToast('Mediation scheduled and notifications sent.')">Schedule & Notify</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Record Outcome -->
+<div class="modal-overlay" id="modal-record-outcome">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Record Mediation Outcome</span>
+      <button class="modal-close" onclick="closeModal('modal-record-outcome')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Complainant Attendance</label>
+          <select><option>Present</option><option>Absent</option><option>Represented</option></select>
+        </div>
+        <div class="form-group">
+          <label>Respondent Attendance</label>
+          <select><option>Present</option><option>Absent</option><option>Represented</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Outcome</label>
+        <select>
+          <option>Settled — written agreement signed</option>
+          <option>Partially settled — follow-up required</option>
+          <option>Not settled — rescheduled</option>
+          <option>Respondent absent — 1st miss (warning issued)</option>
+          <option>Respondent absent — 2nd miss (penalty triggered)</option>
+          <option>Respondent absent — 3rd miss (escalate to municipality)</option>
+          <option>Case withdrawn by complainant</option>
+          <option>Referred to police / VAWC</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Summary Notes</label>
+        <textarea placeholder="Key points of discussion, agreements reached, or reasons for non-settlement…"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Next Steps / Actions</label>
+        <textarea placeholder="Follow-up actions, schedule next hearing, issue penalty notice…" style="min-height:60px"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-record-outcome')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-record-outcome');showToast('Outcome recorded successfully.')">Save Outcome</button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,105 @@
+<div class="page" id="page-sanctions-book">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h2>Sanctions Book</h2>
+      <p>Searchable reference for penalties and sanctions based on violation level and type</p>
+    </div>
+    <div class="page-header-actions">
+      <button class="btn btn-outline btn-sm" onclick="openModal('modal-add-sanction')">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6.5 2v9M2 6.5h9"/></svg>
+        Add Sanction
+      </button>
+      <button class="btn btn-outline btn-sm">Import Ordinance</button>
+    </div>
+  </div>
+
+  <!-- Search Bar -->
+  <div class="card mb20" style="overflow:visible">
+    <div class="card-body" style="padding:16px 18px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div class="input-group" style="flex:1;min-width:240px">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M13 13l-3-3"/></svg>
+          <input type="search" id="sanction-search" placeholder="Search violation type, sanction name, ordinance…" oninput="filterSanctions()" style="padding-left:38px;font-size:14px">
+        </div>
+        <select id="sanction-level-filter" onchange="filterSanctions()" style="width:auto;min-width:140px">
+          <option value="">All Levels</option>
+          <option value="minor">Minor</option>
+          <option value="moderate">Moderate</option>
+          <option value="serious">Serious</option>
+          <option value="critical">Critical</option>
+        </select>
+        <select id="sanction-type-filter" onchange="filterSanctions()" style="width:auto;min-width:180px">
+          <option value="">All Violation Types</option>
+          <option value="noise">Noise Disturbance</option>
+          <option value="altercation">Physical Altercation</option>
+          <option value="verbal">Verbal Abuse</option>
+          <option value="property">Property Damage</option>
+          <option value="domestic">Domestic Dispute</option>
+          <option value="vawc">VAWC</option>
+          <option value="nuisance">Public Nuisance</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Level Tabs -->
+  <div style="margin-bottom:16px;display:flex;flex-wrap:wrap;gap:6px">
+    <span class="sanction-level-tab active chip-minor" onclick="setLevelTab(this,'all')" style="background:#EAF3DE;color:#3B6D11;border-color:#3B6D11">All Levels</span>
+    <span class="sanction-level-tab chip-minor" onclick="setLevelTab(this,'minor')" style="background:#EAF3DE;color:#3B6D11;border-color:transparent">Minor</span>
+    <span class="sanction-level-tab chip-moderate" onclick="setLevelTab(this,'moderate')" style="background:var(--amber-50);color:var(--amber-600);border-color:transparent">Moderate</span>
+    <span class="sanction-level-tab chip-serious" onclick="setLevelTab(this,'serious')" style="background:var(--rose-50);color:var(--rose-600);border-color:transparent">Serious</span>
+    <span class="sanction-level-tab chip-critical" onclick="setLevelTab(this,'critical')" style="background:var(--violet-50);color:var(--violet-600);border-color:transparent">Critical</span>
+  </div>
+
+  <!-- Sanctions List -->
+  <div id="sanctions-list"></div>
+
+</div>
+
+<!-- Modal: Add Sanction -->
+<div class="modal-overlay" id="modal-add-sanction">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Add Sanction Entry</span>
+      <button class="modal-close" onclick="closeModal('modal-add-sanction')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Violation Type <span class="req">*</span></label>
+          <select><option value="">Select type</option><option>Noise Disturbance</option><option>Physical Altercation</option><option>Verbal Abuse</option><option>Property Damage</option><option>Domestic Dispute</option><option>VAWC</option><option>Public Nuisance</option><option>Other</option></select>
+        </div>
+        <div class="form-group">
+          <label>Violation Level <span class="req">*</span></label>
+          <select><option>Minor</option><option>Moderate</option><option>Serious</option><option>Critical</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Sanction Name <span class="req">*</span></label>
+        <input type="text" placeholder="e.g. Written Warning, Community Service Order">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Monetary Fine</label>
+          <input type="text" placeholder="₱0 if none">
+        </div>
+        <div class="form-group">
+          <label>Community Service (hours)</label>
+          <input type="number" placeholder="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Ordinance Reference</label>
+        <input type="text" placeholder="e.g. Barangay Ordinance No. 2022-04, §3.1">
+      </div>
+      <div class="form-group">
+        <label>Description / Conditions</label>
+        <textarea placeholder="When this sanction applies, escalation conditions, etc."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-add-sanction')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-add-sanction');showToast('Sanction entry added to the book.')">Add Entry</button>
+    </div>
+  </div>
+</div>

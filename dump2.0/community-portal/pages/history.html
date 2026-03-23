@@ -1,0 +1,65 @@
+<div class="page" id="page-history">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h2>Case History</h2>
+      <p>Archived and resolved cases you were involved in</p>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" placeholder="Search by case number…">
+    <select>
+      <option>All Roles</option>
+      <option>Complainant</option>
+      <option>Respondent</option>
+    </select>
+    <select>
+      <option>All Years</option>
+      <option>2026</option>
+      <option>2025</option>
+      <option>2024</option>
+      <option>2023</option>
+    </select>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Case No.</th>
+            <th>Role</th>
+            <th>Incident</th>
+            <th>Filed</th>
+            <th>Resolved</th>
+            <th>Outcome</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>#2023-0045</strong></td>
+            <td><span class="chip chip-review">Complainant</span></td>
+            <td>Verbal abuse / harassment</td>
+            <td>Nov 5, 2023</td>
+            <td>Dec 12, 2023</td>
+            <td>Settled via mediation</td>
+            <td><span class="chip chip-resolved">Resolved</span></td>
+            <td><button class="action-btn" onclick="openDetail('history','#2023-0045')">View</button></td>
+          </tr>
+          <tr>
+            <td><strong>#2022-0019</strong></td>
+            <td><span class="chip chip-violated">Respondent</span></td>
+            <td>Public disturbance</td>
+            <td>Mar 3, 2022</td>
+            <td>Apr 1, 2022</td>
+            <td>Penalty paid · Community service</td>
+            <td><span class="chip chip-closed">Closed</span></td>
+            <td><button class="action-btn" onclick="openDetail('history','#2022-0019')">View</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

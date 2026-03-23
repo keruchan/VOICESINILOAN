@@ -1,0 +1,84 @@
+<div class="page" id="page-my-blotters">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h2>My Blotters</h2>
+      <p>Cases you filed as the complainant</p>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('modal-report')">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6.5 2v9M2 6.5h9"/></svg>
+      New Report
+    </button>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" placeholder="Search case number or description…">
+    <select>
+      <option>All Status</option>
+      <option>Pending</option>
+      <option>Under Review</option>
+      <option>Resolved</option>
+      <option>Closed</option>
+    </select>
+    <select>
+      <option>All Types</option>
+      <option>Report a Person</option>
+      <option>Incident Report</option>
+    </select>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Case No.</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Respondent</th>
+            <th>Filed</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>#2024-0092</strong></td>
+            <td>Report a Person</td>
+            <td>Property boundary dispute</td>
+            <td>Pedro Santos</td>
+            <td>Mar 20, 2026</td>
+            <td><span class="chip chip-review">Under Review</span></td>
+            <td><button class="action-btn" onclick="openDetail('blotter','#2024-0092')">View</button></td>
+          </tr>
+          <tr>
+            <td><strong>#2024-0087</strong></td>
+            <td>Report a Person</td>
+            <td>Noise disturbance, late night</td>
+            <td>Maria Reyes</td>
+            <td>Mar 10, 2026</td>
+            <td><span class="chip chip-scheduled">Mediation Set</span></td>
+            <td><button class="action-btn" onclick="openDetail('blotter','#2024-0087')">View</button></td>
+          </tr>
+          <tr>
+            <td><strong>#2024-0061</strong></td>
+            <td>Incident Report</td>
+            <td>Vandalism on community wall</td>
+            <td>Unknown</td>
+            <td>Feb 18, 2026</td>
+            <td><span class="chip chip-pending">Pending</span></td>
+            <td><button class="action-btn" onclick="openDetail('blotter','#2024-0061')">View</button></td>
+          </tr>
+          <tr>
+            <td><strong>#2023-0045</strong></td>
+            <td>Report a Person</td>
+            <td>Verbal abuse and harassment</td>
+            <td>Roberto Cruz</td>
+            <td>Nov 5, 2023</td>
+            <td><span class="chip chip-resolved">Resolved</span></td>
+            <td><button class="action-btn" onclick="openDetail('blotter','#2023-0045')">View</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

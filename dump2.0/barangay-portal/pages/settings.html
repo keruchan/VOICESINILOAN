@@ -1,0 +1,299 @@
+<div class="page" id="page-settings">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h2>Settings</h2>
+      <p>Manage barangay profile, officers, and system preferences</p>
+    </div>
+    <button class="btn btn-primary" onclick="showToast('Settings saved successfully.')">Save Changes</button>
+  </div>
+
+  <div class="tab-bar">
+    <div class="tab-item active" onclick="switchSettingsTab(this,'set-barangay')">Barangay Profile</div>
+    <div class="tab-item" onclick="switchSettingsTab(this,'set-officers')">Officers & Users</div>
+    <div class="tab-item" onclick="switchSettingsTab(this,'set-ordinances')">Ordinance References</div>
+    <div class="tab-item" onclick="switchSettingsTab(this,'set-notifications')">Notification Templates</div>
+    <div class="tab-item" onclick="switchSettingsTab(this,'set-system')">System Preferences</div>
+  </div>
+
+  <!-- Barangay Profile -->
+  <div id="set-barangay">
+    <div class="g2" style="align-items:start">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Barangay Information</span></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Barangay Name <span class="req">*</span></label>
+            <input type="text" placeholder="e.g. Barangay San Roque">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Municipality / City</label>
+              <input type="text" placeholder="e.g. Quezon City">
+            </div>
+            <div class="form-group">
+              <label>Province</label>
+              <input type="text" placeholder="e.g. Metro Manila">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Barangay Code</label>
+              <input type="text" placeholder="PSGC Code">
+            </div>
+            <div class="form-group">
+              <label>Contact Number</label>
+              <input type="text" placeholder="(02) XXXX-XXXX">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Official Address</label>
+            <input type="text" placeholder="Barangay Hall address">
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" placeholder="bgy.xxxx@gmail.com">
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card mb14">
+          <div class="card-header"><span class="card-title">Barangay Captain</span></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Full Name</label>
+              <input type="text" placeholder="Punong Barangay name">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Contact</label>
+                <input type="text" placeholder="Mobile number">
+              </div>
+              <div class="form-group">
+                <label>Term End</label>
+                <input type="date">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Secretary</span></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Full Name</label>
+              <input type="text" placeholder="Barangay Secretary name">
+            </div>
+            <div class="form-group">
+              <label>Contact</label>
+              <input type="text" placeholder="Mobile number">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Officers & Users (hidden) -->
+  <div id="set-officers" style="display:none">
+    <div class="card mb14">
+      <div class="card-header">
+        <span class="card-title">Barangay Officers & System Users</span>
+        <button class="btn btn-primary btn-sm" onclick="openModal('modal-add-officer')">Add Officer</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Role</th><th>Contact</th><th>System Access</th><th>Last Login</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="td-main">Juan dela Cruz</td>
+              <td><span class="chip chip-blue">Punong Barangay</span></td>
+              <td>09171234567</td>
+              <td><span class="chip chip-violet">Admin</span></td>
+              <td>Today, 8:02 AM</td>
+              <td><button class="act-btn">Edit</button></td>
+            </tr>
+            <tr>
+              <td class="td-main">Maria Santos</td>
+              <td><span class="chip chip-slate">Kagawad</span></td>
+              <td>09181234567</td>
+              <td><span class="chip chip-emerald">Editor</span></td>
+              <td>Today, 9:14 AM</td>
+              <td><button class="act-btn">Edit</button></td>
+            </tr>
+            <tr>
+              <td class="td-main">Pedro Cruz</td>
+              <td><span class="chip chip-slate">Kagawad</span></td>
+              <td>09191234567</td>
+              <td><span class="chip chip-emerald">Editor</span></td>
+              <td>Mar 22, 2026</td>
+              <td><button class="act-btn">Edit</button></td>
+            </tr>
+            <tr>
+              <td class="td-main">Rosa Ramos</td>
+              <td><span class="chip chip-amber">Secretary</span></td>
+              <td>09201234567</td>
+              <td><span class="chip chip-cyan">Viewer</span></td>
+              <td>Today, 7:55 AM</td>
+              <td><button class="act-btn">Edit</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ordinance References (hidden) -->
+  <div id="set-ordinances" style="display:none">
+    <div class="card mb14">
+      <div class="card-header">
+        <span class="card-title">Referenced Ordinances</span>
+        <button class="btn btn-primary btn-sm">Add Reference</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Ordinance No.</th><th>Title</th><th>Enacted</th><th>Covers</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="td-mono">Ord. 2022-04</td>
+              <td class="td-main">Barangay Peace and Order Ordinance</td>
+              <td>Jan 15, 2022</td>
+              <td>General violations, mediation process, penalties</td>
+              <td><button class="act-btn">View</button></td>
+            </tr>
+            <tr>
+              <td class="td-mono">Ord. 2021-12</td>
+              <td class="td-main">Anti-Noise Pollution Ordinance</td>
+              <td>Aug 10, 2021</td>
+              <td>Noise disturbance, curfew violations</td>
+              <td><button class="act-btn">View</button></td>
+            </tr>
+            <tr>
+              <td class="td-mono">RA 9262</td>
+              <td class="td-main">Anti-Violence Against Women and Children Act</td>
+              <td>National Law</td>
+              <td>VAWC cases, mandatory referrals</td>
+              <td><button class="act-btn">View</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Templates (hidden) -->
+  <div id="set-notifications" style="display:none">
+    <div class="g2">
+      <div class="card mb14">
+        <div class="card-header"><span class="card-title">SMS Templates</span></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Mediation Summons</label>
+            <textarea style="min-height:70px">Dear {RESPONDENT_NAME}, you are hereby summoned to appear at {VENUE} on {DATE} at {TIME} for a mediation hearing (Case #{CASE_NO}). Contact {CONTACT_NO} for concerns. - Barangay {BARANGAY_NAME}</textarea>
+          </div>
+          <div class="form-group">
+            <label>Mediation Reminder (48hrs)</label>
+            <textarea style="min-height:70px">REMINDER: You have a mediation hearing tomorrow, {DATE} at {TIME} at {VENUE} for Case #{CASE_NO}. Please be on time. - Barangay {BARANGAY_NAME}</textarea>
+          </div>
+          <div class="form-group">
+            <label>Missed Hearing Warning</label>
+            <textarea style="min-height:70px">Dear {RESPONDENT_NAME}, you failed to appear at the mediation on {DATE} (Case #{CASE_NO}). This is your {MISS_COUNT} missed hearing. A penalty of {PENALTY_AMOUNT} has been issued. - Barangay {BARANGAY_NAME}</textarea>
+          </div>
+        </div>
+      </div>
+      <div class="card mb14">
+        <div class="card-header"><span class="card-title">Available Variables</span></div>
+        <div class="card-body">
+          <div style="font-size:12px;color:var(--slate-500);line-height:2">
+            <code style="background:var(--slate-100);padding:2px 6px;border-radius:4px;font-size:11px">{RESPONDENT_NAME}</code> — Full name of respondent<br>
+            <code style="background:var(--slate-100);padding:2px 6px;border-radius:4px;font-size:11px">{COMPLAINANT_NAME}</code> — Full name of complainant<br>
+            <code style="background:var(--slate-100);padding:2px 6px;border-radius:4px;font-size:11px">{CASE_NO}</code> — Case number<br>
+            <code style="background:var(--slate-100);padding:2px 6px;border-radius:4px;font-size:11px">{DATE}</code> — Hearing date<br>
+            <code style="background:var(--slate-100);padding:2px 6px;border-radius:4px;font-size:11px">{TIME}</code> — Hearing time<br>
+            <code style="background:var(--slate-100);padding:2px 6px;border-radius:4px;font-size:11px">{VENUE}</code> — Hearing location<br>
+            <code style="background:var(--slate-100);padding:2px 6px;border-radius:4px;font-size:11px">{PENALTY_AMOUNT}</code> — Fine amount<br>
+            <code style="background:var(--slate-100);padding:2px 6px;border-radius:4px;font-size:11px">{MISS_COUNT}</code> — Number of missed hearings<br>
+            <code style="background:var(--slate-100);padding:2px 6px;border-radius:4px;font-size:11px">{BARANGAY_NAME}</code> — This barangay's name<br>
+            <code style="background:var(--slate-100);padding:2px 6px;border-radius:4px;font-size:11px">{CONTACT_NO}</code> — Barangay contact number
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- System Preferences (hidden) -->
+  <div id="set-system" style="display:none">
+    <div class="g2">
+      <div class="card mb14">
+        <div class="card-header"><span class="card-title">Case Number Format</span></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Format</label>
+            <select><option>#YYYY-NNNN (e.g. #2026-0001)</option><option>YYYY/NNNN</option><option>BGY-YYYY-NNNN</option></select>
+          </div>
+          <div class="form-group">
+            <label>Reset Counter</label>
+            <select><option>Annually (per year)</option><option>Never (sequential)</option></select>
+          </div>
+        </div>
+      </div>
+      <div class="card mb14">
+        <div class="card-header"><span class="card-title">Escalation Rules</span></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Auto-escalate after missed mediations</label>
+            <select><option>3 missed hearings</option><option>2 missed hearings</option><option>Never (manual only)</option></select>
+          </div>
+          <div class="form-group">
+            <label>Fine per missed mediation (₱)</label>
+            <input type="number" value="500">
+          </div>
+          <div class="form-group">
+            <label>Auto-send SMS reminders</label>
+            <select><option>48 hours before</option><option>24 hours before</option><option>Both (48hr and 24hr)</option><option>Disabled</option></select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal: Add Officer -->
+<div class="modal-overlay" id="modal-add-officer">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Add Officer / User</span>
+      <button class="modal-close" onclick="closeModal('modal-add-officer')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Full Name <span class="req">*</span></label>
+          <input type="text" placeholder="Last, First Middle">
+        </div>
+        <div class="form-group">
+          <label>Role <span class="req">*</span></label>
+          <select><option>Punong Barangay</option><option>Kagawad</option><option>Secretary</option><option>Treasurer</option><option>Staff</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Contact Number</label>
+          <input type="text" placeholder="09XX-XXX-XXXX">
+        </div>
+        <div class="form-group">
+          <label>System Access Level</label>
+          <select><option>Admin</option><option>Editor</option><option>Viewer</option><option>No Access</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Email (for login)</label>
+        <input type="email" placeholder="officer@email.com">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-add-officer')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-add-officer');showToast('Officer added and login credentials sent.')">Add Officer</button>
+    </div>
+  </div>
+</div>

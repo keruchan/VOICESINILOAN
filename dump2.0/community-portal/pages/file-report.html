@@ -1,0 +1,106 @@
+<div class="page" id="page-file-report">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h2>File a Report</h2>
+      <p>Choose the type of report to file with the barangay</p>
+    </div>
+  </div>
+
+  <div style="max-width: 640px;">
+    <div class="report-type-grid">
+      <div class="report-type-card selected" onclick="selectReportType(this, 'person')">
+        <div class="report-type-icon">👤</div>
+        <div class="report-type-title">Report a Person</div>
+        <div class="report-type-desc">Known violator or respondent</div>
+      </div>
+      <div class="report-type-card" onclick="selectReportType(this, 'incident')">
+        <div class="report-type-icon">⚠️</div>
+        <div class="report-type-title">Incident Report</div>
+        <div class="report-type-desc">No identified violator</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">Report Details</span></div>
+      <div class="card-body">
+        <div id="person-fields">
+          <div class="form-group">
+            <label>Respondent's Full Name <span class="required">*</span></label>
+            <input type="text" placeholder="Enter full name of the person being reported">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Respondent's Address</label>
+              <input type="text" placeholder="House/Lot No., Street">
+            </div>
+            <div class="form-group">
+              <label>Contact Number (Optional)</label>
+              <input type="text" placeholder="09XX-XXX-XXXX">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Incident Type <span class="required">*</span></label>
+            <select>
+              <option value="">Select incident type</option>
+              <option>Noise Disturbance</option>
+              <option>Physical Altercation</option>
+              <option>Verbal Abuse / Harassment</option>
+              <option>Property Damage / Vandalism</option>
+              <option>Theft / Robbery</option>
+              <option>Trespassing</option>
+              <option>Domestic Dispute</option>
+              <option>Public Nuisance</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Violation Level</label>
+            <select>
+              <option>Minor</option>
+              <option>Moderate</option>
+              <option>Serious</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date of Incident <span class="required">*</span></label>
+            <input type="date">
+          </div>
+          <div class="form-group">
+            <label>Time of Incident</label>
+            <input type="time">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Location of Incident <span class="required">*</span></label>
+          <input type="text" placeholder="Specific location within the barangay">
+        </div>
+
+        <div class="form-group">
+          <label>Incident Description <span class="required">*</span></label>
+          <textarea placeholder="Provide a detailed account of what happened. Include relevant events, witnesses, and any injuries or damages…" style="min-height: 100px;"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Supporting Evidence (Optional)</label>
+          <div style="border: 1.5px dashed var(--gray-200); border-radius: var(--radius-sm); padding: 20px; text-align: center; cursor: pointer; background: var(--gray-50);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" stroke-width="1.5" stroke-linecap="round" style="margin-bottom:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <div style="font-size:13px; color:var(--gray-400)">Click to upload photos, videos, or documents</div>
+            <div style="font-size:11px; color:var(--gray-400); margin-top:2px">Max 10MB per file · JPG, PNG, PDF, MP4</div>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; justify-content: flex-end;">
+          <button class="btn btn-outline">Save as Draft</button>
+          <button class="btn btn-primary" onclick="showToast('Report submitted successfully! Your case number is #2026-0101.')">Submit Report</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
