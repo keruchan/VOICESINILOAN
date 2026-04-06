@@ -211,6 +211,142 @@ try {
 $action_labels = array_map(fn($k) => ucwords(str_replace('_',' ',$k)), array_keys($action_data));
 $action_vals   = array_values($action_data);
 
+// ── Prescriptive Analytics ────────────────────────────────
+// 1. Resolution bottleneck: cases active > 30 days
+$bottleneck_count = 0;
+try {
+    $bottleneck_count = (int)$pdo->query("
+        SELECT COUNT(*) FROM blotters
+        WHERE barangay_id=$bid
+          AND status NOT IN ('resolved','closed','transferred')
+          AND DATEDIFF(NOW(), created_at) > 30
+    ")->fetchColumn();
+} catch (PDOException $e) {}
+
+// 2. Upcoming no-show risk: scheduled hearings in next 7 days with prior no-show history
+$noshow_risk_cases = [];
+try {
+    $noshow_risk_cases = $pdo->query("
+        SELECT b.case_number, b.respondent_name, ms.hearing_date, ms.hearing_time
+        FROM mediation_schedules ms
+        JOIN blotters b ON b.id = ms.blotter_id
+        WHERE b.barangay_id=$bid
+          AND ms.status='scheduled'
+          AND ms.hearing_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+          AND EXISTS (
+              SELECT 1 FROM mediation_schedules ms2
+              WHERE ms2.blotter_id = ms.blotter_id AND ms2.missed_session = 1
+          )
+        ORDER BY ms.hearing_date ASC LIMIT 5
+    ")->fetchAll();
+} catch (PDOException $e) {}
+
+// 3. Overdue penalties
+$overdue_penalties = [];
+try {
+    $overdue_penalties = $pdo->query("
+        SELECT b.case_number, b.respondent_name, p.amount, p.due_date
+        FROM penalties p
+        JOIN blotters b ON b.id = p.blotter_id
+        WHERE b.barangay_id=$bid
+          AND p.status = 'overdue'
+        ORDER BY p.due_date ASC LIMIT 5
+    ")->fetchAll();
+} catch (PDOException $e) {}
+
+// 4. Top incident type this month (for community intervention recommendation)
+$top_incident_this_month = '';
+try {
+    $r = $pdo->query("
+        SELECT incident_type, COUNT(*) c FROM blotters
+        WHERE barangay_id=$bid
+          AND MONTH(created_at)=MONTH(CURDATE()) AND YEAR(created_at)=YEAR(CURDATE())
+        GROUP BY incident_type ORDER BY c DESC LIMIT 1
+    ")->fetch();
+    $top_incident_this_month = $r['incident_type'] ?? '';
+} catch (PDOException $e) {}
+
+// 5. Unresolved critical/serious cases
+$critical_unresolved = 0;
+try {
+    $critical_unresolved = (int)$pdo->query("
+        SELECT COUNT(*) FROM blotters
+        WHERE barangay_id=$bid
+          AND violation_level IN ('critical','serious')
+          AND status NOT IN ('resolved','closed','transferred')
+    ")->fetchColumn();
+} catch (PDOException $e) {}
+
+// 6. Cases with no hearing scheduled yet (active, no mediation record)
+$cases_no_hearing = 0;
+try {
+    $cases_no_hearing = (int)$pdo->query("
+        SELECT COUNT(*) FROM blotters b
+        WHERE b.barangay_id=$bid
+          AND b.status = 'active'
+          AND NOT EXISTS (
+              SELECT 1 FROM mediation_schedules ms WHERE ms.blotter_id = b.id
+          )
+    ")->fetchColumn();
+} catch (PDOException $e) {}
+
+// Build prioritized action items
+$actions = [];
+
+if ($critical_unresolved > 0)
+    $actions[] = ['priority'=>'critical','icon'=>'🔴','title'=>'Unresolved Critical/Serious Cases',
+        'desc'=>"<strong>{$critical_unresolved} case(s)</strong> rated serious or critical are still open. Escalate or schedule immediate mediation.",
+        'cta'=>'Review Cases','link'=>'?page=blotter-management&level=critical'];
+
+if ($bottleneck_count > 0)
+    $actions[] = ['priority'=>'high','icon'=>'⏳','title'=>'Cases Stalled Over 30 Days',
+        'desc'=>"<strong>{$bottleneck_count} case(s)</strong> have been active for more than 30 days without resolution. Review for escalation or closure.",
+        'cta'=>'View Stalled','link'=>'?page=blotter-management'];
+
+if (!empty($noshow_risk_cases))
+    $actions[] = ['priority'=>'high','icon'=>'📵','title'=>'No-Show Risk — Hearings This Week',
+        'desc'=>"<strong>".count($noshow_risk_cases)." hearing(s)</strong> this week involve parties with prior no-show history. Send advance notices now.",
+        'cta'=>'View Hearings','link'=>'?page=mediation'];
+
+if ($kpi['penalties_pending'] > 0)
+    $actions[] = ['priority'=>'medium','icon'=>'⚖️','title'=>'Pending Penalty Collection',
+        'desc'=>"<strong>{$kpi['penalties_pending']} penalty record(s)</strong> are awaiting collection or action. Follow up to close outstanding sanctions.",
+        'cta'=>'Sanctions Book','link'=>'?page=sanctions-book'];
+
+if ($cases_no_hearing > 0)
+    $actions[] = ['priority'=>'medium','icon'=>'📅','title'=>'Active Cases Without Scheduled Hearing',
+        'desc'=>"<strong>{$cases_no_hearing} active case(s)</strong> have no mediation hearing scheduled. Set hearing dates to move them forward.",
+        'cta'=>'Schedule Hearing','link'=>'?page=mediation'];
+
+if ($no_show_rate >= 30)
+    $actions[] = ['priority'=>'medium','icon'=>'🔔','title'=>'High Mediation No-Show Rate ('.$no_show_rate.'%)',
+        'desc'=>"Your no-show rate is above the 30% threshold. Consider SMS/call reminders 24–48 hours before each scheduled hearing.",
+        'cta'=>'View Mediations','link'=>'?page=mediation'];
+
+if ($res_rate < 50 && $kpi['total'] > 5)
+    $actions[] = ['priority'=>'medium','icon'=>'📉','title'=>'Low Resolution Rate ('.$res_rate.'%)',
+        'desc'=>"Less than half of blotters are being resolved. Review case workflows and consider barangay justice capacity-building.",
+        'cta'=>'Blotter Management','link'=>'?page=blotter-management'];
+
+if ($trend_dir === 'up' && $trend_pct >= 10)
+    $actions[] = ['priority'=>'low','icon'=>'📈','title'=>'Blotter Volume Trending Up ('.$trend_pct.'%)',
+        'desc'=>"Incident filings are projected to increase by <strong>{$trend_pct}%</strong>. Consider proactive community engagement or additional officer scheduling.",
+        'cta'=>'View Forecast','link'=>'#'];
+
+if (!empty($top_incident_this_month))
+    $actions[] = ['priority'=>'low','icon'=>'💡','title'=>"Dominant Incident: {$top_incident_this_month}",
+        'desc'=>"This month's top reported incident is <strong>".htmlspecialchars($top_incident_this_month)."</strong>. A targeted community seminar or awareness drive may help reduce recurrence.",
+        'cta'=>'View Blotters','link'=>'?page=blotter-management'];
+
+if (count($repeat_violators) > 0)
+    $actions[] = ['priority'=>'low','icon'=>'🔁','title'=>count($repeat_violators).' Repeat Violator(s) Require Monitoring',
+        'desc'=>"Individuals with 2 or more blotters may benefit from a barangay intervention program or formal watchlist.",
+        'cta'=>'Violator Monitor','link'=>'?page=violator-monitor'];
+
+// Priority order map
+$prio_order = ['critical'=>0,'high'=>1,'medium'=>2,'low'=>3];
+usort($actions, fn($a,$b) => $prio_order[$a['priority']] - $prio_order[$b['priority']]);
+
 // ── Recent blotters ────────────────────────────────────────────
 $recent = [];
 try {
@@ -613,6 +749,127 @@ try {
     <div class="card-body"><div style="height:180px"><canvas id="ch-actions"></canvas></div></div>
   </div>
 </div>
+
+<!-- ══════════════════════════ PRESCRIPTIVE ANALYTICS ══════════════════════════ -->
+<div class="analytics-section-hdr">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 1v2M7 11v2M1 7h2M11 7h2M3 3l1.5 1.5M9.5 9.5L11 11M11 3l-1.5 1.5M4.5 9.5L3 11"/><circle cx="7" cy="7" r="2.5"/></svg>
+  <span>Prescriptive Actions</span>
+</div>
+
+<?php if (empty($actions)): ?>
+<div class="card mb22" style="border-left:3px solid var(--emerald-400)">
+  <div class="card-body" style="display:flex;align-items:center;gap:14px;padding:18px">
+    <div style="font-size:28px">✅</div>
+    <div>
+      <div style="font-size:14px;font-weight:600;color:var(--ink-900)">No urgent actions required</div>
+      <div style="font-size:12px;color:var(--ink-400);margin-top:2px">All indicators are within healthy ranges. Keep up the good work!</div>
+    </div>
+  </div>
+</div>
+<?php else: ?>
+
+<!-- Action summary strip -->
+<?php
+  $cnt_critical = count(array_filter($actions, fn($a) => $a['priority']==='critical'));
+  $cnt_high     = count(array_filter($actions, fn($a) => $a['priority']==='high'));
+  $cnt_medium   = count(array_filter($actions, fn($a) => $a['priority']==='medium'));
+  $cnt_low      = count(array_filter($actions, fn($a) => $a['priority']==='low'));
+?>
+<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+  <?php if ($cnt_critical): ?>
+  <div style="display:flex;align-items:center;gap:6px;background:var(--rose-50);border:1px solid var(--rose-100);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;color:var(--rose-600)">
+    <span style="width:7px;height:7px;border-radius:50%;background:var(--rose-400);display:inline-block"></span>
+    <?= $cnt_critical ?> Critical
+  </div>
+  <?php endif; ?>
+  <?php if ($cnt_high): ?>
+  <div style="display:flex;align-items:center;gap:6px;background:var(--amber-50);border:1px solid var(--amber-200);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;color:var(--amber-600)">
+    <span style="width:7px;height:7px;border-radius:50%;background:var(--amber-400);display:inline-block"></span>
+    <?= $cnt_high ?> High Priority
+  </div>
+  <?php endif; ?>
+  <?php if ($cnt_medium): ?>
+  <div style="display:flex;align-items:center;gap:6px;background:var(--navy-50);border:1px solid var(--navy-200);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;color:var(--navy-600)">
+    <span style="width:7px;height:7px;border-radius:50%;background:var(--navy-400);display:inline-block"></span>
+    <?= $cnt_medium ?> Medium
+  </div>
+  <?php endif; ?>
+  <?php if ($cnt_low): ?>
+  <div style="display:flex;align-items:center;gap:6px;background:var(--ink-50);border:1px solid var(--ink-100);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;color:var(--ink-400)">
+    <span style="width:7px;height:7px;border-radius:50%;background:var(--ink-300);display:inline-block"></span>
+    <?= $cnt_low ?> Advisory
+  </div>
+  <?php endif; ?>
+</div>
+
+<div class="presc-grid mb22">
+<?php foreach ($actions as $act):
+  $border_col = match($act['priority']) {
+    'critical' => 'var(--rose-400)',
+    'high'     => 'var(--amber-400)',
+    'medium'   => 'var(--navy-400)',
+    default    => 'var(--ink-200)',
+  };
+  $badge_bg = match($act['priority']) {
+    'critical' => 'var(--rose-50)',
+    'high'     => 'var(--amber-50)',
+    'medium'   => 'var(--navy-50)',
+    default    => 'var(--ink-50)',
+  };
+  $badge_col = match($act['priority']) {
+    'critical' => 'var(--rose-600)',
+    'high'     => 'var(--amber-600)',
+    'medium'   => 'var(--navy-600)',
+    default    => 'var(--ink-400)',
+  };
+  $badge_border = match($act['priority']) {
+    'critical' => 'var(--rose-100)',
+    'high'     => 'var(--amber-200)',
+    'medium'   => 'var(--navy-200)',
+    default    => 'var(--ink-100)',
+  };
+  $badge_label = match($act['priority']) {
+    'critical' => 'Critical',
+    'high'     => 'High',
+    'medium'   => 'Medium',
+    default    => 'Advisory',
+  };
+?>
+  <div class="presc-card" style="border-left:3px solid <?= $border_col ?>">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px;line-height:1"><?= $act['icon'] ?></span>
+        <span style="font-size:12px;font-weight:700;color:var(--ink-900)"><?= e($act['title']) ?></span>
+      </div>
+      <span style="flex-shrink:0;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;
+                   background:<?= $badge_bg ?>;color:<?= $badge_col ?>;border:1px solid <?= $badge_border ?>"><?= $badge_label ?></span>
+    </div>
+    <p style="font-size:12px;color:var(--ink-600);line-height:1.6;margin-bottom:10px"><?= $act['desc'] ?></p>
+    <a href="<?= e($act['link']) ?>" class="act-btn" style="font-size:11px"><?= e($act['cta']) ?> →</a>
+  </div>
+<?php endforeach; ?>
+</div>
+
+<?php endif; ?>
+
+<!-- Prescriptive grid style -->
+<style>
+.presc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.presc-card {
+  background: var(--white);
+  border: 1px solid var(--ink-100);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+}
+@media(max-width:1100px){ .presc-grid{ grid-template-columns: repeat(2,1fr); } }
+@media(max-width:768px) { .presc-grid{ grid-template-columns: 1fr; } }
+</style>
 
 <!-- ══════════════════════════ RECENT BLOTTERS + SIDEBAR ══════════════════════════ -->
 <div class="g21">

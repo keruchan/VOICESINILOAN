@@ -1,5 +1,5 @@
 <?php
-// barangay-portal/ajax/search_users.php
+// barangay-portal/ajax/search_users_barangay.php
 require_once '../../connection/auth.php';
 guardRole('barangay');
 
