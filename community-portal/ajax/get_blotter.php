@@ -48,6 +48,16 @@ try {
     $tl->execute([$id]);
     $blotter['timeline'] = $tl->fetchAll();
 
+    // Fetch attachments - NEW
+    $att = $pdo->prepare("
+        SELECT id, file_path, original_name, file_size, mime_type, created_at
+        FROM blotter_attachments
+        WHERE blotter_id = ?
+        ORDER BY created_at ASC
+    ");
+    $att->execute([$id]);
+    $blotter['attachments'] = $att->fetchAll() ?: [];
+
     jsonResponse(true, 'OK', $blotter);
 } catch (PDOException $e) {
     error_log($e->getMessage());

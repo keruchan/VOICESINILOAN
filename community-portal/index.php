@@ -47,7 +47,7 @@ try {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title><?= e($titles[$page]) ?> — VOICE Community</title>
+  <title><?= e($titles[$page]) ?> — VOICE2 Community</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
 </head>
@@ -58,7 +58,7 @@ try {
   <aside class="sidebar">
     <div class="sb-brand">
       <div class="sb-pill"><div class="sb-dot"></div><span>Community Portal</span></div>
-      <div class="sb-name">VOICE</div>
+      <div class="sb-name">VOICE2</div>
       <div class="sb-sub">Barangay Blotter System</div>
     </div>
 
@@ -201,7 +201,7 @@ function viewBlotter(id){
     .then(r => r.json())
     .then(d => {
       if (!d.success) { document.getElementById('panel-body').innerHTML = '<p style="color:var(--rose-600);padding:20px">Unable to load case.</p>'; return; }
-      const b = d.data;
+      const b = d;
       document.getElementById('panel-case-no').textContent = b.case_number;
       document.getElementById('panel-case-sub').textContent = b.incident_type + ' · ' + b.incident_date;
 
@@ -225,6 +225,30 @@ function viewBlotter(id){
           </div>
         </div>` : '';
 
+      // Attachments section
+      // Attachments section
+const attachmentsHtml = (b.attachments && b.attachments.length > 0) ? `
+  <div class="card mb16">
+    <div class="card-hdr"><span class="card-title">📎 Attachments (${b.attachments.length})</span></div>
+    <div class="card-body" style="padding:12px 16px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px">
+        ${b.attachments.map((att, idx) => {
+          const imgPath = '../' + att.file_path;
+          return `
+            <div style="position:relative;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--ink-100);background:var(--surface);cursor:pointer" onclick="viewAttachment('${imgPath}','${att.original_name}')">
+              <img src="${imgPath}" alt="${att.original_name}" style="width:100%;height:100px;object-fit:cover;display:block;cursor:pointer">
+              <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0);transition:background .2s;display:flex;align-items:center;justify-content:center;font-size:24px;opacity:0;transition:opacity .2s" class="att-hover">
+                🔍
+              </div>
+              <div style="font-size:10px;color:var(--ink-500);padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--surface-2)">${att.original_name}</div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  </div>
+` : '';
+
       document.getElementById('panel-body').innerHTML = `
         <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
           ${levelChip(b.violation_level)} ${statusChip(b.status)}
@@ -246,11 +270,48 @@ function viewBlotter(id){
             <p style="font-size:13px;color:var(--ink-700);line-height:1.75">${b.narrative||'No narrative recorded.'}</p>
           </div>
         </div>
+        ${attachmentsHtml}
         ${medSection}
         ${tl ? `<div style="font-size:11px;font-weight:700;color:var(--ink-400);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">ACTIVITY LOG</div>${tl}` : ''}
       `;
+
+      // Add hover effect after rendering
+      document.querySelectorAll('.att-hover').forEach(el => {
+        el.parentElement.addEventListener('mouseenter', () => {
+          el.style.opacity = '1';
+          el.parentElement.style.background = 'rgba(0,0,0,.3)';
+        });
+        el.parentElement.addEventListener('mouseleave', () => {
+          el.style.opacity = '0';
+          el.parentElement.style.background = 'rgba(0,0,0,0)';
+        });
+      });
     })
-    .catch(() => { document.getElementById('panel-body').innerHTML = '<p style="color:var(--rose-600);padding:20px">Request failed.</p>'; });
+    .catch(err => { 
+      console.error(err);
+      document.getElementById('panel-body').innerHTML = '<p style="color:var(--rose-600);padding:20px">Request failed.</p>'; 
+    });
+}
+
+// Function to view attachment in fullscreen modal
+function viewAttachment(filePath, fileName) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center';
+  
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(filePath);
+  
+  const content = isImage 
+    ? `<img src="${filePath}" alt="${fileName}" style="max-width:90vw;max-height:90vh;border-radius:var(--r-lg);box-shadow:0 20px 40px rgba(0,0,0,.3)">`
+    : `<div style="background:#fff;padding:40px;border-radius:var(--r-lg);text-align:center;color:var(--ink-600)"><div style="font-size:48px;margin-bottom:20px">📄</div><div style="font-size:14px;margin-bottom:20px">${fileName}</div><a href="${filePath}" download class="btn btn-primary">Download File</a></div>`;
+  
+  modal.innerHTML = `
+    ${content}
+    <button onclick="this.parentElement.remove()" style="position:absolute;top:20px;right:20px;width:40px;height:40px;background:#fff;border:none;border-radius:50%;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2)">×</button>
+  `;
+  
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  document.body.appendChild(modal);
 }
 </script>
 </body>
