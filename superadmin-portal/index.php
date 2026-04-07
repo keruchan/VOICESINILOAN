@@ -142,7 +142,7 @@ try {
     <div class="muni-chip">
       <div class="muni-icon">SL</div>
       <div>
-        <div class="muni-name">Siniloan</div>
+        <div class="muni-name">Paete</div>
         <div class="muni-role">Municipality Administrator</div>
       </div>
     </div>
@@ -210,7 +210,7 @@ try {
     <div class="topbar">
       <div class="topbar-left">
         <span class="topbar-title"><?= htmlspecialchars($current_title) ?></span>
-        <span class="topbar-crumb">Siniloan · Superadmin</span>
+        <span class="topbar-crumb">Paete · Superadmin</span>
       </div>
       <div class="topbar-actions">
 

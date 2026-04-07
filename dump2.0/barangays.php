@@ -105,7 +105,7 @@ try {
     <div class="modal-body">
       <div class="form-group"><label>Barangay Name <span class="req">*</span></label><input type="text" id="bgy-name" placeholder="e.g. Barangay Acevida"></div>
       <div class="form-row">
-        <div class="form-group"><label>Municipality / City <span class="req">*</span></label><input type="text" id="bgy-muni" placeholder="e.g. Siniloan"></div>
+        <div class="form-group"><label>Municipality / City <span class="req">*</span></label><input type="text" id="bgy-muni" placeholder="e.g. Paete"></div>
         <div class="form-group"><label>Province</label><input type="text" id="bgy-prov" placeholder="e.g. Laguna"></div>
       </div>
       <div class="form-row">

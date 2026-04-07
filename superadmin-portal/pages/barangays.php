@@ -132,7 +132,7 @@ try {
       <input type="hidden" id="edit-bgy-id">
       <div class="form-group"><label>Barangay Name <span class="req">*</span></label><input type="text" id="edit-bgy-name" placeholder="e.g. Barangay San Roque"></div>
       <div class="form-row">
-        <div class="form-group"><label>Municipality / City <span class="req">*</span></label><input type="text" id="edit-bgy-muni" placeholder="e.g. Siniloan"></div>
+        <div class="form-group"><label>Municipality / City <span class="req">*</span></label><input type="text" id="edit-bgy-muni" placeholder="e.g. Paete"></div>
         <div class="form-group"><label>Province</label><input type="text" id="edit-bgy-prov" placeholder="e.g. Laguna"></div>
       </div>
       <div class="form-row">

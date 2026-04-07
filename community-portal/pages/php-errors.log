@@ -72,3 +72,4 @@
 [06-Apr-2026 20:05:13 Europe/Berlin] Failed to fetch barangay coords: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'lat' in 'field list'
 [06-Apr-2026 20:05:19 Europe/Berlin] Failed to fetch barangay coords: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'lat' in 'field list'
 [06-Apr-2026 20:05:29 Europe/Berlin] Failed to fetch barangay coords: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'lat' in 'field list'
+[07-Apr-2026 05:58:16 Europe/Berlin] Failed to fetch barangay coords: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'lat' in 'field list'
