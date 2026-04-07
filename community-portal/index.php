@@ -32,14 +32,15 @@ try {
 // Sidebar badge counts
 $badge_blotters = $badge_cases = $badge_notices = $badge_med = 0;
 try {
-    // My active blotters (filed by me, not resolved)
-    $badge_blotters = (int)$pdo->query("SELECT COUNT(*) FROM blotters WHERE complainant_user_id=$uid AND status NOT IN ('resolved','closed','transferred')")->fetchColumn();
-    // Cases where I am tagged as violator
-    $badge_cases = (int)$pdo->query("SELECT COUNT(*) FROM violations WHERE user_id=$uid")->fetchColumn();
-    // Unread notices (acknowledged_at IS NULL = not yet acknowledged)
-    $badge_notices = (int)$pdo->query("SELECT COUNT(*) FROM notices WHERE recipient_user_id=$uid AND acknowledged_at IS NULL")->fetchColumn();
-    // Upcoming mediations for my blotters
-    $badge_med = (int)$pdo->query("SELECT COUNT(*) FROM mediation_schedules ms JOIN blotters b ON b.id=ms.blotter_id WHERE b.complainant_user_id=$uid AND ms.status='scheduled' AND ms.hearing_date>=CURDATE()")->fetchColumn();
+    $uname_esc = addslashes($user['name'] ?? '');
+    // My active blotters (filed by me, not resolved/closed/dismissed)
+    $badge_blotters = (int)$pdo->query("SELECT COUNT(*) FROM blotters WHERE complainant_user_id=$uid AND status NOT IN ('resolved','closed','transferred','dismissed')")->fetchColumn();
+    // Cases where I am named respondent — respondent_user_id (direct) OR name match (walk-in)
+    $badge_cases = (int)$pdo->query("SELECT COUNT(*) FROM blotters WHERE barangay_id=$bid AND (respondent_user_id=$uid OR (respondent_user_id IS NULL AND respondent_name LIKE '%$uname_esc%')) AND status NOT IN ('resolved','closed','dismissed')")->fetchColumn();
+    // Unread notifications — party_notifications table (notices table is empty/unused)
+    $badge_notices = (int)$pdo->query("SELECT COUNT(*) FROM party_notifications WHERE recipient_user_id=$uid AND read_at IS NULL AND status IN ('pending','sent')")->fetchColumn();
+    // Upcoming mediations — both as complainant AND as respondent
+    $badge_med = (int)$pdo->query("SELECT COUNT(*) FROM mediation_schedules ms JOIN blotters b ON b.id=ms.blotter_id WHERE b.barangay_id=$bid AND ms.status='scheduled' AND ms.hearing_date>=CURDATE() AND (b.complainant_user_id=$uid OR b.respondent_user_id=$uid OR b.respondent_name LIKE '%$uname_esc%')")->fetchColumn();
 } catch (PDOException $e) {}
 ?>
 <!DOCTYPE html>
@@ -195,124 +196,194 @@ function showToast(msg, type=''){
 function viewBlotter(id){
   document.getElementById('panel-case-no').textContent = 'Loading…';
   document.getElementById('panel-case-sub').textContent = '';
-  document.getElementById('panel-body').innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-400)">Loading…</div>';
+  document.getElementById('panel-body').innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:12px;color:var(--ink-400)">
+      <div style="width:32px;height:32px;border:3px solid var(--ink-100);border-top-color:var(--green-500);border-radius:50%;animation:spin .7s linear infinite"></div>
+      <span style="font-size:13px">Loading case details…</span>
+    </div>`;
   openPanel();
+
   fetch('ajax/get_blotter.php?id=' + id)
     .then(r => r.json())
     .then(d => {
-      if (!d.success) { document.getElementById('panel-body').innerHTML = '<p style="color:var(--rose-600);padding:20px">Unable to load case.</p>'; return; }
+      if (!d.success) {
+        document.getElementById('panel-body').innerHTML = `
+          <div style="text-align:center;padding:48px 20px;color:var(--ink-400)">
+            <div style="font-size:32px;margin-bottom:12px">⚠️</div>
+            <div style="font-size:14px;font-weight:600;color:var(--ink-600);margin-bottom:6px">Unable to load case</div>
+            <div style="font-size:13px">${d.message||'Access denied or case not found.'}</div>
+          </div>`; return;
+      }
       const b = d;
-      document.getElementById('panel-case-no').textContent = b.case_number;
-      document.getElementById('panel-case-sub').textContent = b.incident_type + ' · ' + b.incident_date;
 
-      const tl = (b.timeline||[]).map(t => `
+      // ── Header ──
+      document.getElementById('panel-case-no').textContent  = b.case_number;
+      document.getElementById('panel-case-sub').textContent = (b.other_incident_type || b.incident_type || '') + (b.incident_date ? ' · ' + b.incident_date : '');
+
+      // ── Chips ──
+      const chips = `
+        <div style="display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap">
+          ${levelChip(b.violation_level)}
+          ${statusChip(b.status)}
+          ${b.other_incident_type ? `<span class="chip ch-slate">${esc(b.other_incident_type)}</span>` : ''}
+        </div>`;
+
+      // ── Case info — two-column grid ──
+      const loc = [b.incident_street, b.incident_barangay].filter(Boolean).join(', ') || b.incident_location || '—';
+      const filedDate = b.created_at ? new Date(b.created_at).toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric'}) : '—';
+      const filedTime = b.created_at ? new Date(b.created_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) : '';
+
+      const caseInfo = `
+        <div class="card mb16">
+          <div class="card-hdr"><span class="card-title">📋 Case Information</span></div>
+          <div class="card-body" style="padding:14px 18px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+              <div class="dr" style="grid-column:1/3">
+                <span class="dr-lbl">Case No.</span>
+                <span class="dr-val" style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--ink-900)">${esc(b.case_number)}</span>
+              </div>
+              <div class="dr"><span class="dr-lbl">Complainant</span><span class="dr-val" style="color:var(--ink-900);font-weight:600">${esc(b.complainant_name||'—')}</span></div>
+              <div class="dr"><span class="dr-lbl">Contact</span><span class="dr-val">${esc(b.complainant_contact||'—')}</span></div>
+              <div class="dr"><span class="dr-lbl">Respondent</span><span class="dr-val" style="color:var(--ink-900);font-weight:600">${esc(b.respondent_name||'None identified')}</span></div>
+              <div class="dr"><span class="dr-lbl">Resp. Contact</span><span class="dr-val">${esc(b.respondent_contact||'—')}</span></div>
+              <div class="dr" style="grid-column:1/3"><span class="dr-lbl">Location</span><span class="dr-val" style="max-width:70%;text-align:right">${esc(loc)}</span></div>
+              <div class="dr"><span class="dr-lbl">Prescribed Action</span><span class="dr-val">${ucw(b.prescribed_action||'pending_review')}</span></div>
+              <div class="dr">
+                <span class="dr-lbl">Date Filed</span>
+                <span class="dr-val" style="color:var(--ink-900);font-weight:700">${filedDate}${filedTime ? '<br><span style="font-size:11px;font-weight:400;color:var(--ink-600)">'+filedTime+'</span>' : ''}</span>
+              </div>
+            </div>
+          </div>
+        </div>`;
+
+      // ── Narrative ──
+      const narrative = `
+        <div class="card mb16">
+          <div class="card-hdr"><span class="card-title">📝 Narrative</span></div>
+          <div class="card-body" style="padding:16px 18px">
+            <p style="font-size:13.5px;color:var(--ink-800,#1e293b);line-height:1.85;white-space:pre-wrap;word-break:break-word">${esc(b.narrative||'No narrative recorded.')}</p>
+          </div>
+        </div>`;
+
+      // ── Mediation ──
+      const medSection = b.mediation ? `
+        <div class="card mb16" style="border-top:3px solid var(--green-500)">
+          <div class="card-hdr"><span class="card-title">📅 Scheduled Mediation</span></div>
+          <div class="card-body" style="padding:14px 18px">
+            <div style="background:var(--green-50);border:1px solid var(--green-100);border-radius:var(--r-md);padding:12px 14px;margin-bottom:10px">
+              <div style="font-size:17px;font-weight:700;color:var(--green-700)">${new Date(b.mediation.hearing_date+'T00:00').toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
+              ${b.mediation.hearing_time ? `<div style="font-size:14px;color:var(--green-600);margin-top:4px">⏰ ${b.mediation.hearing_time}</div>` : ''}
+              <div style="font-size:12px;color:var(--ink-500);margin-top:4px">📍 ${esc(b.mediation.venue||'Barangay Hall')}</div>
+            </div>
+          </div>
+        </div>` : '';
+
+      // ── Attachments ──
+      let attachSection = '';
+      if (b.attachments && b.attachments.length > 0) {
+        const thumbs = b.attachments.map(a => {
+          const url = '../../' + a.file_path;
+          const kb  = a.file_size ? Math.round(a.file_size/1024) + ' KB' : '';
+          return `
+            <a href="${url}" target="_blank" title="${esc(a.original_name)}" style="display:block;position:relative;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--ink-100);aspect-ratio:1;background:var(--surface-2)">
+              <img src="${url}" alt="${esc(a.original_name)}" style="width:100%;height:100%;object-fit:cover;display:block">
+              <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:3px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.original_name)}</div>
+            </a>`;
+        }).join('');
+        attachSection = `
+          <div class="card mb16">
+            <div class="card-hdr">
+              <span class="card-title">📎 Attachments</span>
+              <span style="font-size:11px;color:var(--ink-400)">${b.attachments.length} photo(s)</span>
+            </div>
+            <div class="card-body" style="padding:14px 18px">
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px">${thumbs}</div>
+            </div>
+          </div>`;
+      }
+
+      // ── Map (only if lat/lng exist) ──
+      let mapSection = '';
+      const lat = parseFloat(b.incident_lat);
+      const lng = parseFloat(b.incident_lng);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        mapSection = `
+          <div class="card mb16">
+            <div class="card-hdr">
+              <span class="card-title">📍 Incident Location</span>
+              <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}" target="_blank" style="font-size:11px;color:var(--green-600);font-weight:600;text-decoration:none">Open in Maps ↗</a>
+            </div>
+            <div class="card-body" style="padding:0">
+              <div id="view-map-${id}" style="height:220px;width:100%"></div>
+            </div>
+            <div style="padding:10px 18px;background:var(--surface);border-top:1px solid var(--surface-2);font-size:11px;color:var(--ink-400);font-family:var(--font-mono)">
+              ${lat.toFixed(6)}, ${lng.toFixed(6)}
+            </div>
+          </div>`;
+      }
+
+      // ── Timeline ──
+      const timeline = (b.timeline||[]).map(t => `
         <div class="tl-item">
-          <div class="tl-dot tl-dot-slate"></div>
+          <div class="tl-dot tl-dot-green"></div>
           <div>
             <div class="tl-title">${ucw(t.action)}</div>
-            <div class="tl-desc">${t.description||''}</div>
+            <div class="tl-desc">${esc(t.description||'')}</div>
             <div class="tl-time">${t.created_at}</div>
           </div>
         </div>`).join('');
 
-      const medSection = b.mediation ? `
-        <div class="card mb16" style="border-top:3px solid var(--green-500)">
-          <div class="card-hdr"><span class="card-title">📅 Scheduled Mediation</span></div>
-          <div class="card-body" style="padding:12px 16px">
-            <div class="dr"><span class="dr-lbl">Date</span><span class="dr-val" style="color:var(--green-700);font-weight:700">${new Date(b.mediation.hearing_date+'T00:00').toLocaleDateString('en-PH',{weekday:'short',month:'long',day:'numeric',year:'numeric'})}</span></div>
-            <div class="dr"><span class="dr-lbl">Time</span><span class="dr-val">${b.mediation.hearing_time||'TBD'}</span></div>
-            <div class="dr"><span class="dr-lbl">Venue</span><span class="dr-val">${b.mediation.venue||'Barangay Hall'}</span></div>
-          </div>
-        </div>` : '';
+      // ── Render ──
+      document.getElementById('panel-body').innerHTML =
+        chips + caseInfo + narrative + medSection + attachSection + mapSection +
+        (timeline ? `<div style="font-size:10px;font-weight:700;color:var(--ink-400);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">ACTIVITY LOG</div>${timeline}` : '');
 
-      // Attachments section
-      // Attachments section
-const attachmentsHtml = (b.attachments && b.attachments.length > 0) ? `
-  <div class="card mb16">
-    <div class="card-hdr"><span class="card-title">📎 Attachments (${b.attachments.length})</span></div>
-    <div class="card-body" style="padding:12px 16px">
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px">
-        ${b.attachments.map((att, idx) => {
-          const imgPath = '../' + att.file_path;
-          return `
-            <div style="position:relative;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--ink-100);background:var(--surface);cursor:pointer" onclick="viewAttachment('${imgPath}','${att.original_name}')">
-              <img src="${imgPath}" alt="${att.original_name}" style="width:100%;height:100px;object-fit:cover;display:block;cursor:pointer">
-              <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0);transition:background .2s;display:flex;align-items:center;justify-content:center;font-size:24px;opacity:0;transition:opacity .2s" class="att-hover">
-                🔍
-              </div>
-              <div style="font-size:10px;color:var(--ink-500);padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--surface-2)">${att.original_name}</div>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    </div>
-  </div>
-` : '';
-
-      document.getElementById('panel-body').innerHTML = `
-        <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
-          ${levelChip(b.violation_level)} ${statusChip(b.status)}
-        </div>
-        <div class="card mb16">
-          <div class="card-hdr"><span class="card-title">Case Information</span></div>
-          <div class="card-body" style="padding:12px 16px">
-            <div class="dr"><span class="dr-lbl">Case No.</span><span class="dr-val" style="font-family:var(--font-mono)">${b.case_number}</span></div>
-            <div class="dr"><span class="dr-lbl">Complainant</span><span class="dr-val">${b.complainant_name}</span></div>
-            <div class="dr"><span class="dr-lbl">Respondent</span><span class="dr-val">${b.respondent_name||'Unknown'}</span></div>
-            <div class="dr"><span class="dr-lbl">Location</span><span class="dr-val">${b.incident_location||'—'}</span></div>
-            <div class="dr"><span class="dr-lbl">Prescribed Action</span><span class="dr-val">${ucw(b.prescribed_action||'Pending')}</span></div>
-            <div class="dr"><span class="dr-lbl">Date Filed</span><span class="dr-val">${b.created_at?.substring(0,10)||'—'}</span></div>
-          </div>
-        </div>
-        <div class="card mb16">
-          <div class="card-hdr"><span class="card-title">Narrative</span></div>
-          <div class="card-body" style="padding:12px 16px">
-            <p style="font-size:13px;color:var(--ink-700);line-height:1.75">${b.narrative||'No narrative recorded.'}</p>
-          </div>
-        </div>
-        ${attachmentsHtml}
-        ${medSection}
-        ${tl ? `<div style="font-size:11px;font-weight:700;color:var(--ink-400);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">ACTIVITY LOG</div>${tl}` : ''}
-      `;
-
-      // Add hover effect after rendering
-      document.querySelectorAll('.att-hover').forEach(el => {
-        el.parentElement.addEventListener('mouseenter', () => {
-          el.style.opacity = '1';
-          el.parentElement.style.background = 'rgba(0,0,0,.3)';
-        });
-        el.parentElement.addEventListener('mouseleave', () => {
-          el.style.opacity = '0';
-          el.parentElement.style.background = 'rgba(0,0,0,0)';
-        });
-      });
+      // ── Init map after render ──
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setTimeout(() => initViewMap(id, lat, lng), 80);
+      }
     })
-    .catch(err => { 
-      console.error(err);
-      document.getElementById('panel-body').innerHTML = '<p style="color:var(--rose-600);padding:20px">Request failed.</p>'; 
+    .catch(err => {
+      document.getElementById('panel-body').innerHTML = `
+        <div style="text-align:center;padding:48px 20px;color:var(--ink-400)">
+          <div style="font-size:32px;margin-bottom:12px">❌</div>
+          <div style="font-size:14px;font-weight:600;color:var(--ink-600);margin-bottom:6px">Request failed</div>
+          <div style="font-size:12px">Check your connection and try again.</div>
+        </div>`;
     });
 }
 
-// Function to view attachment in fullscreen modal
-function viewAttachment(filePath, fileName) {
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay open';
-  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center';
-  
-  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(filePath);
-  
-  const content = isImage 
-    ? `<img src="${filePath}" alt="${fileName}" style="max-width:90vw;max-height:90vh;border-radius:var(--r-lg);box-shadow:0 20px 40px rgba(0,0,0,.3)">`
-    : `<div style="background:#fff;padding:40px;border-radius:var(--r-lg);text-align:center;color:var(--ink-600)"><div style="font-size:48px;margin-bottom:20px">📄</div><div style="font-size:14px;margin-bottom:20px">${fileName}</div><a href="${filePath}" download class="btn btn-primary">Download File</a></div>`;
-  
-  modal.innerHTML = `
-    ${content}
-    <button onclick="this.parentElement.remove()" style="position:absolute;top:20px;right:20px;width:40px;height:40px;background:#fff;border:none;border-radius:50%;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2)">×</button>
-  `;
-  
-  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-  document.body.appendChild(modal);
+// ── Leaflet map for view panel ──
+const _viewMaps = {};
+function initViewMap(id, lat, lng) {
+  const el = document.getElementById('view-map-' + id);
+  if (!el || _viewMaps[id]) return;
+  if (typeof L === 'undefined') {
+    // Load Leaflet on demand
+    const css = document.createElement('link');
+    css.rel='stylesheet'; css.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+    document.head.appendChild(css);
+    const js = document.createElement('script');
+    js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    js.onload = () => buildViewMap(id, lat, lng, el);
+    document.head.appendChild(js);
+  } else {
+    buildViewMap(id, lat, lng, el);
+  }
 }
+function buildViewMap(id, lat, lng, el) {
+  if (_viewMaps[id]) return;
+  const m = L.map(el, { zoomControl:true, scrollWheelZoom:false }).setView([lat,lng], 16);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom:19
+  }).addTo(m);
+  L.marker([lat,lng]).addTo(m).bindPopup('Incident location').openPopup();
+  _viewMaps[id] = m;
+}
+
+// ── Helper: HTML-escape ──
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 </script>
 </body>
 </html>

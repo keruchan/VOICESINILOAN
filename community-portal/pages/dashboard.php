@@ -29,10 +29,10 @@ try {
     $notices_count = (int)$pdo->query("SELECT COUNT(*) FROM notices WHERE recipient_user_id=$uid AND acknowledged_at IS NULL")->fetchColumn();
 } catch (PDOException $e) {}
 
-// Active penalties
+// Active penalties - UPDATED to include p.community_hours
 $penalties = [];
 try {
-    $penalties = $pdo->query("SELECT p.reason,p.amount,p.due_date,p.status FROM penalties p JOIN blotters b ON b.id=p.blotter_id WHERE b.complainant_user_id=$uid OR EXISTS(SELECT 1 FROM violations v WHERE v.blotter_id=b.id AND v.user_id=$uid) ORDER BY p.created_at DESC LIMIT 3")->fetchAll();
+    $penalties = $pdo->query("SELECT p.reason, p.amount, p.community_hours, p.due_date, p.status FROM penalties p JOIN blotters b ON b.id=p.blotter_id WHERE b.complainant_user_id=$uid OR EXISTS(SELECT 1 FROM violations v WHERE v.blotter_id=b.id AND v.user_id=$uid) ORDER BY p.created_at DESC LIMIT 3")->fetchAll();
 } catch (PDOException $e) {}
 
 $lm = ['minor'=>'ch-green','moderate'=>'ch-amber','serious'=>'ch-rose','critical'=>'ch-violet'];
@@ -59,7 +59,6 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
 </div>
 <?php endif; ?>
 
-<!-- KPIs -->
 <div class="kpi-grid">
   <div class="kpi-card kc-green">
     <div class="kpi-top"><div class="kpi-icon ki-green"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="2" width="14" height="14" rx="2"/><path d="M5 7h8M5 10h5"/></svg></div></div>
@@ -80,7 +79,6 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
 </div>
 
 <div class="g21 mb22">
-  <!-- Recent blotters -->
   <div class="card">
     <div class="card-hdr">
       <div class="card-title">My Recent Blotters</div>
@@ -107,7 +105,6 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
     </div>
   </div>
 
-  <!-- Right sidebar -->
   <div>
     <?php if (!empty($hearings)): ?>
     <div class="card mb16">
@@ -128,7 +125,7 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
 
     <?php if (!empty($penalties)): ?>
     <div class="card mb16">
-      <div class="card-hdr"><div class="card-title">💰 Active Penalties</div><a href="?page=notices" class="act-btn">All</a></div>
+      <div class="card-hdr"><div class="card-title">⚖️ Active Sanctions</div><a href="?page=notices" class="act-btn">All</a></div>
       <div class="card-body" style="padding:0 18px">
         <?php foreach ($penalties as $pen):
           $pc = ['pending'=>'ch-amber','paid'=>'ch-green','overdue'=>'ch-rose','waived'=>'ch-slate'][$pen['status']]??'ch-slate';
@@ -138,8 +135,34 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
             <div style="font-size:13px;font-weight:500;color:var(--ink-900);flex:1;margin-right:8px"><?= e($pen['reason']) ?></div>
             <span class="chip <?= $pc ?>"><?= ucfirst($pen['status']) ?></span>
           </div>
-          <div style="font-size:13px;font-weight:700;color:var(--rose-600);margin-top:4px">₱<?= number_format((float)$pen['amount']) ?></div>
-          <?php if ($pen['due_date']): ?><div style="font-size:11px;color:var(--ink-400)">Due: <?= date('M j, Y', strtotime($pen['due_date'])) ?></div><?php endif; ?>
+          
+          <div style="font-size:13px;font-weight:700;color:var(--rose-600);margin-top:4px;display:flex;align-items:center;gap:6px;">
+            <?php 
+                $hasFine = (float)$pen['amount'] > 0;
+                $hasService = isset($pen['community_hours']) && (int)$pen['community_hours'] > 0;
+            ?>
+            
+            <?php if ($hasFine): ?>
+                <span>₱<?= number_format((float)$pen['amount'], 2) ?></span>
+            <?php endif; ?>
+            
+            <?php if ($hasFine && $hasService): ?>
+                <span style="color:var(--ink-300);font-weight:400;">&bull;</span>
+            <?php endif; ?>
+            
+            <?php if ($hasService): ?>
+                <span style="color:var(--amber-600);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:text-bottom;margin-right:2px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <?= (int)$pen['community_hours'] ?> hrs Service
+                </span>
+            <?php endif; ?>
+
+            <?php if (!$hasFine && !$hasService): ?>
+                <span style="color:var(--ink-500);font-weight:500;">Warning / Documented</span>
+            <?php endif; ?>
+          </div>
+
+          <?php if ($pen['due_date']): ?><div style="font-size:11px;color:var(--ink-400);margin-top:2px">Due: <?= date('M j, Y', strtotime($pen['due_date'])) ?></div><?php endif; ?>
         </div>
         <?php endforeach; ?>
       </div>
