@@ -4,7 +4,7 @@ require_once '../connection/auth.php';
 guardRole('barangay');
 $user = currentUser();  // keys: id, name, role, barangay_id
 
-$allowed = ['dashboard','blotter-management','violator-monitor','mediation','sanctions-book','records-archive','settings'];
+$allowed = ['dashboard','blotter-management','violator-monitor','mediation','user-management','sanctions-book','records-archive','settings'];
 $page    = (isset($_GET['page']) && in_array($_GET['page'], $allowed)) ? $_GET['page'] : 'dashboard';
 
 $titles = [
@@ -12,6 +12,7 @@ $titles = [
     'blotter-management' => 'Blotter Management',
     'violator-monitor'   => 'Violator Monitor',
     'mediation'          => 'Mediation',
+    'user-management'     => 'User Management',
     'sanctions-book'     => 'Sanctions Book',
     'records-archive'    => 'Records Archive',
     'settings'           => 'Settings',
@@ -112,6 +113,11 @@ if (!$bgy_init) $bgy_init = 'BG';
         <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M6 3V1.5M10 3V1.5"/></svg>
         <span class="nav-label">Mediation</span>
         <?php if ($med_count > 0): ?><span class="nav-badge nb-amber"><?= $med_count ?></span><?php endif; ?>
+      </a>
+
+      <a class="nav-a <?= $page === 'user-management' ? 'active' : '' ?>" href="?page=user-management">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M6 3V1.5M10 3V1.5"/></svg>
+        <span class="nav-label">User Management</span>
       </a>
 
       <div class="nav-hr"></div>
@@ -386,6 +392,13 @@ if (!$bgy_init) $bgy_init = 'BG';
             border-radius:var(--r-lg);box-shadow:0 8px 28px rgba(0,0,0,.18);
             overflow:hidden;min-width:260px"></div>
 
+<!-- Panel respondent search dropdown (fixed to body) -->
+<div id="panel-resp-dropdown"
+     style="display:none;position:fixed;z-index:99999;
+            background:var(--surface,#fff);border:1px solid var(--ink-100);
+            border-radius:var(--r-lg);box-shadow:0 8px 28px rgba(0,0,0,.18);
+            overflow:hidden;min-width:260px"></div>
+
 <!-- ══ GLOBAL: Blotter Detail Panel ══ -->
 <div class="panel-overlay" id="panel-overlay">
   <div class="slide-panel" id="slide-panel">
@@ -468,42 +481,311 @@ function renderPanel(b) {
   document.getElementById('panel-case-no').textContent = b.case_number;
   document.getElementById('panel-case-sub').textContent = b.incident_type + ' - ' + b.incident_date;
 
-  const prescribedOpts = ['document_only','mediation','refer_barangay','refer_police','refer_vawc','escalate_municipality']
+  const prescribedOpts = ['pending','document_only','mediation','refer_barangay','refer_police','refer_vawc','escalate_municipality']
     .map(function(v) { return '<option value="' + v + '"' + (b.prescribed_action===v?' selected':'') + '>' + ucw(v.replace(/_/g,' ')) + '</option>'; }).join('');
 
   const statusOpts = ['pending_review','active','mediation_set','escalated','resolved','closed','transferred']
     .map(function(v) { return '<option value="' + v + '"' + (b.status===v?' selected':'') + '>' + ucw(v.replace(/_/g,' ')) + '</option>'; }).join('');
 
   const timeline = (b.timeline||[]).map(function(t) {
-    return '<div class="tl-item"><div class="tl-dot tl-dot-teal"></div><div><div class="tl-title">' + t.action.replace(/_/g,' ') + '</div><div class="tl-desc">' + (t.description||'') + '</div><div class="tl-time">' + t.created_at + '</div></div></div>';
+    return '<div class="tl-item"><div class="tl-dot tl-dot-teal"></div><div><div class="tl-title">' + ucw(t.action.replace(/_/g,' ')) + '</div><div class="tl-desc">' + (t.description||'') + '</div><div class="tl-time">' + t.created_at + '</div></div></div>';
   }).join('');
 
   const attachmentsHtml = (b.attachments && b.attachments.length > 0) ?
-    '<div class="card mb16"><div class="card-hdr"><span class="card-title">Attachments (' + b.attachments.length + ')</span></div><div class="card-body" style="padding:12px 16px"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px">' +
+    '<div class="card mb16"><div class="card-hdr"><span class="card-title">📎 Attachments (' + b.attachments.length + ')</span></div><div class="card-body" style="padding:12px 16px"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px">' +
     b.attachments.map(function(att) {
       const imgPath = '../' + att.file_path;
-      return '<div style="position:relative;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--ink-100);background:var(--surface);cursor:pointer" onclick="viewAttachment(\'' + imgPath + '\',\'' + att.original_name + '\')">' +
-        '<img src="' + imgPath + '" alt="' + att.original_name + '" style="width:100%;height:100px;object-fit:cover;display:block;background:var(--surface-2)" onerror="this.style.opacity=\'0.3\'">' +
+      return '<div style="border-radius:var(--r-md);overflow:hidden;border:1px solid var(--ink-100);cursor:pointer" onclick="viewAttachment(\'' + imgPath + '\',\'' + att.original_name + '\')">' +
+        '<img src="' + imgPath + '" alt="' + att.original_name + '" style="width:100%;height:100px;object-fit:cover;display:block" onerror="this.style.opacity=\'0.3\'">' +
         '<div style="font-size:10px;color:var(--ink-500);padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--surface-2)">' + att.original_name + '</div></div>';
     }).join('') + '</div></div></div>' : '';
 
+  // Respondent linked badge HTML (shown if currently linked to a registered user)
+  const respBadge = b.respondent_user_id
+    ? '<div id="panel-resp-badge" style="display:flex;align-items:center;gap:6px;background:var(--green-50);border:1px solid var(--green-200);border-radius:var(--r-md);padding:7px 10px;margin-bottom:6px;font-size:12px">' +
+      '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="var(--green-600)" stroke-width="1.8" stroke-linecap="round"><path d="M2 7l3.5 3.5L11 3"/></svg>' +
+      '<span style="font-weight:600;color:var(--green-700)" id="panel-resp-linked-name">' + pEsc(b.respondent_name||'') + '</span>' +
+      '<span style="color:var(--green-600);font-size:11px">· Registered user</span>' +
+      '<button type="button" onclick="panelRespUnlink()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--ink-400);font-size:16px;line-height:1;padding:0 2px">×</button>' +
+      '</div>' +
+      '<input type="text" id="panel-resp-name" value="' + pEsc(b.respondent_name||'') + '" style="display:none" autocomplete="off" oninput="panelRespInput(this.value)" onkeydown="panelRespKeydown(event)" onfocus="panelRespFocus()">'
+    : '<div id="panel-resp-badge" style="display:none;align-items:center;gap:6px;background:var(--green-50);border:1px solid var(--green-200);border-radius:var(--r-md);padding:7px 10px;margin-bottom:6px;font-size:12px">' +
+      '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="var(--green-600)" stroke-width="1.8" stroke-linecap="round"><path d="M2 7l3.5 3.5L11 3"/></svg>' +
+      '<span style="font-weight:600;color:var(--green-700)" id="panel-resp-linked-name"></span>' +
+      '<span style="color:var(--green-600);font-size:11px">· Registered user</span>' +
+      '<button type="button" onclick="panelRespUnlink()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--ink-400);font-size:16px;line-height:1;padding:0 2px">×</button>' +
+      '</div>' +
+      '<input type="text" id="panel-resp-name" placeholder="Type to search, or leave blank if unknown" value="' + pEsc(b.respondent_name||'') + '" autocomplete="off" oninput="panelRespInput(this.value)" onkeydown="panelRespKeydown(event)" onfocus="panelRespFocus()" style="position:relative">';
+
+  // Store current blotter id + respondent_user_id for the panel save
+  window._panelBlotterId     = b.id;
+  window._panelRespUserId    = b.respondent_user_id || null;
+  window._panelRespLinked    = !!b.respondent_user_id;
+
   document.getElementById('panel-body').innerHTML =
     '<div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">' + levelChip(b.violation_level) + ' ' + statusChip(b.status) + '</div>' +
-    '<div class="card mb16"><div class="card-hdr"><span class="card-title">Case Information</span></div><div class="card-body" style="padding:12px 16px">' +
-    '<div class="dr"><span class="dr-lbl">Complainant</span><span class="dr-val">' + (b.complainant_name||'-') + '</span></div>' +
-    '<div class="dr"><span class="dr-lbl">Contact</span><span class="dr-val">' + (b.complainant_contact||'-') + '</span></div>' +
-    '<div class="dr"><span class="dr-lbl">Respondent</span><span class="dr-val">' + (b.respondent_name||'Unknown') + '</span></div>' +
-    '<div class="dr"><span class="dr-lbl">Resp. Contact</span><span class="dr-val">' + (b.respondent_contact||'-') + '</span></div>' +
-    '<div class="dr"><span class="dr-lbl">Location</span><span class="dr-val">' + (b.incident_location||'-') + '</span></div>' +
-    '<div class="dr"><span class="dr-lbl">Filed</span><span class="dr-val">' + ((b.created_at||'').substring(0,10)||'-') + '</span></div></div></div>' +
-    '<div class="card mb16"><div class="card-hdr"><span class="card-title">Narrative</span></div><div class="card-body" style="padding:12px 16px"><p style="font-size:13px;color:var(--ink-700);line-height:1.75">' + (b.narrative||'No narrative recorded.') + '</p></div></div>' +
+
+    // ── Complainant (read-only) ──
+    '<div class="card mb16">' +
+      '<div class="card-hdr"><span class="card-title">👤 Complainant</span></div>' +
+      '<div class="card-body" style="padding:12px 16px">' +
+        '<div class="dr"><span class="dr-lbl">Name</span><span class="dr-val">' + pEsc(b.complainant_name||'—') + '</span></div>' +
+        '<div class="dr"><span class="dr-lbl">Contact</span><span class="dr-val">' + pEsc(b.complainant_contact||'—') + '</span></div>' +
+        '<div class="dr"><span class="dr-lbl">Location</span><span class="dr-val">' + pEsc(b.incident_location||'—') + '</span></div>' +
+        '<div class="dr"><span class="dr-lbl">Filed</span><span class="dr-val">' + ((b.created_at||'').substring(0,10)||'—') + '</span></div>' +
+      '</div>' +
+    '</div>' +
+
+    // ── Respondent / Violator (editable) ──
+    '<div class="card mb16" style="border-left:3px solid var(--amber-400)">' +
+      '<div class="card-hdr">' +
+        '<span class="card-title">⚠️ Respondent / Violator</span>' +
+        '<span style="font-size:11px;color:var(--amber-600);font-weight:600">Editable</span>' +
+      '</div>' +
+      '<div class="card-body" style="padding:12px 16px">' +
+
+        // Name with live search
+        '<div class="fg" id="panel-resp-wrap">' +
+          '<label style="font-size:12px;font-weight:600;color:var(--ink-600)">Full Name</label>' +
+          '<div style="position:relative">' + respBadge +
+            '<div id="panel-resp-spinner" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%)">' +
+              '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--ink-400)" stroke-width="2" stroke-linecap="round" style="animation:nb-spin .75s linear infinite"><circle cx="7" cy="7" r="5" stroke-opacity=".25"/><path d="M7 2a5 5 0 0 1 5 5"/></svg>' +
+            '</div>' +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--ink-400);margin-top:4px">Search registered users · type manually if not registered · leave blank if unknown</div>' +
+        '</div>' +
+
+        // Contact
+        '<div class="fg">' +
+          '<label style="font-size:12px;font-weight:600;color:var(--ink-600)">Contact Number</label>' +
+          '<input type="tel" id="panel-resp-contact" value="' + pEsc(b.respondent_contact||'') + '" placeholder="09XXXXXXXXX">' +
+        '</div>' +
+
+        // Location
+        '<div class="fg" style="margin-bottom:14px">' +
+          '<label style="font-size:12px;font-weight:600;color:var(--ink-600)">Incident Location</label>' +
+          '<input type="text" id="panel-resp-location" value="' + pEsc(b.incident_location||'') + '" placeholder="Street, Purok, Landmark…">' +
+        '</div>' +
+
+        '<button class="btn btn-primary btn-sm" onclick="saveRespondent()">💾 Save Respondent Details</button>' +
+        '<div id="panel-resp-feedback" style="font-size:12px;margin-top:8px;min-height:16px"></div>' +
+      '</div>' +
+    '</div>' +
+
+    // ── Narrative ──
+    '<div class="card mb16">' +
+      '<div class="card-hdr"><span class="card-title">📝 Narrative</span></div>' +
+      '<div class="card-body" style="padding:12px 16px"><p style="font-size:13px;color:var(--ink-700);line-height:1.75;white-space:pre-wrap">' + pEsc(b.narrative||'No narrative recorded.') + '</p></div>' +
+    '</div>' +
+
     attachmentsHtml +
-    '<div class="card mb16"><div class="card-hdr"><span class="card-title">Update Case</span></div><div class="card-body" style="padding:12px 16px">' +
-    '<div class="fr2"><div class="fg"><label>Status</label><select id="p-status">' + statusOpts + '</select></div>' +
-    '<div class="fg"><label>Prescribed Action</label><select id="p-action">' + prescribedOpts + '</select></div></div>' +
-    '<div class="fg"><label>Remarks</label><textarea id="p-remarks" rows="2" placeholder="Optional officer remarks..."></textarea></div>' +
-    '<div style="text-align:right;margin-top:8px"><button class="btn btn-primary btn-sm" onclick="updateStatus(' + b.id + ')">Save Update</button></div></div></div>' +
+
+    // ── Update Case ──
+    '<div class="card mb16">' +
+      '<div class="card-hdr"><span class="card-title">🔄 Update Case</span></div>' +
+      '<div class="card-body" style="padding:12px 16px">' +
+        '<div class="fr2">' +
+          '<div class="fg"><label>Status</label><select id="p-status">' + statusOpts + '</select></div>' +
+          '<div class="fg"><label>Prescribed Action</label><select id="p-action">' + prescribedOpts + '</select></div>' +
+        '</div>' +
+        '<div class="fg"><label>Remarks</label><textarea id="p-remarks" rows="2" placeholder="Optional officer remarks..."></textarea></div>' +
+        '<div style="text-align:right;margin-top:8px"><button class="btn btn-primary btn-sm" onclick="updateStatus(' + b.id + ')">Save Update</button></div>' +
+      '</div>' +
+    '</div>' +
+
     (timeline ? '<div style="font-size:11px;font-weight:700;color:var(--ink-400);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">Activity Log</div>' + timeline : '');
+
+  // Init panel respondent search state
+  panelRespInit();
+}
+
+// ── Panel respondent search helpers ─────────────────────────────────────────
+var pRespTimer    = null;
+var pRespResults  = [];
+var pRespFocusIdx = -1;
+
+function panelRespInit() {
+  // Move panel dropdown to body (idempotent)
+  const dd = document.getElementById('panel-resp-dropdown');
+  if (dd && dd.parentElement !== document.body) document.body.appendChild(dd);
+}
+
+function pRespPosition() {
+  const input = document.getElementById('panel-resp-name');
+  const dd    = document.getElementById('panel-resp-dropdown');
+  if (!input || !dd) return;
+  const rect = input.getBoundingClientRect();
+  dd.style.top   = (rect.bottom + window.scrollY + 2) + 'px';
+  dd.style.left  = (rect.left  + window.scrollX)     + 'px';
+  dd.style.width = rect.width + 'px';
+}
+
+window.addEventListener('scroll', function() {
+  if (document.getElementById('panel-resp-dropdown')?.style.display !== 'none') pRespPosition();
+}, true);
+window.addEventListener('resize', function() {
+  if (document.getElementById('panel-resp-dropdown')?.style.display !== 'none') pRespPosition();
+});
+
+function panelRespFocus() {
+  const val = document.getElementById('panel-resp-name')?.value?.trim();
+  if (!window._panelRespLinked && val && val.length >= 2 && !pRespResults.length) pRespDoSearch(val);
+}
+
+function panelRespInput(val) {
+  if (window._panelRespLinked) panelRespUnlink(false);
+  clearTimeout(pRespTimer);
+  const q = val.trim();
+  if (q.length < 2) { pRespHideDropdown(); pRespSpinner(false); return; }
+  pRespSpinner(true);
+  pRespTimer = setTimeout(function() { pRespDoSearch(q); }, 300);
+}
+
+function pRespDoSearch(q) {
+  fetch('ajax/search_users_barangay.php?q=' + encodeURIComponent(q))
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(data) {
+      pRespSpinner(false);
+      pRespResults  = (data.success && data.results) ? data.results : [];
+      pRespFocusIdx = -1;
+      pRespRenderDropdown(q);
+    })
+    .catch(function(err) { pRespSpinner(false); pRespHideDropdown(); });
+}
+
+function pRespRenderDropdown(query) {
+  const dd = document.getElementById('panel-resp-dropdown');
+  if (!dd) return;
+  pRespPosition();
+
+  if (!pRespResults.length) {
+    dd.innerHTML = '<div style="padding:11px 14px;font-size:12px;color:var(--ink-400)">No registered user found for "' + pEsc(query) + '" — name will be saved as typed.</div>';
+    dd.style.display = 'block';
+    return;
+  }
+
+  const safe = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re   = new RegExp('(' + safe + ')', 'gi');
+
+  dd.innerHTML = pRespResults.map(function(u, i) {
+    const hi = pEsc(u.name).replace(re, '<mark style="background:var(--amber-100,#fef3c7);color:inherit;border-radius:2px;padding:0 1px">$1</mark>');
+    return '<div class="panel-resp-item" onmousedown="pRespSelect(' + i + ')" onmouseover="pRespSetFocus(' + i + ')" style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--ink-50,#f8fafc)">' +
+      '<span>' + hi + '</span>' +
+      '<span style="font-size:10px;font-weight:700;color:var(--green-600);background:var(--green-50);border:1px solid var(--green-200);border-radius:20px;padding:2px 8px;white-space:nowrap">Registered ✓</span></div>';
+  }).join('');
+  dd.style.display = 'block';
+}
+
+function panelRespKeydown(e) {
+  const dd = document.getElementById('panel-resp-dropdown');
+  if (!dd || dd.style.display === 'none') return;
+  if (e.key === 'ArrowDown')     { e.preventDefault(); pRespSetFocus(Math.min(pRespFocusIdx + 1, pRespResults.length - 1)); }
+  else if (e.key === 'ArrowUp')  { e.preventDefault(); pRespSetFocus(Math.max(pRespFocusIdx - 1, 0)); }
+  else if (e.key === 'Enter' && pRespFocusIdx >= 0) { e.preventDefault(); pRespSelect(pRespFocusIdx); }
+  else if (e.key === 'Escape')   { pRespHideDropdown(); }
+}
+
+function pRespSetFocus(idx) {
+  pRespFocusIdx = idx;
+  document.querySelectorAll('.panel-resp-item').forEach(function(el, i) {
+    el.style.background = i === idx ? 'var(--green-50,#f0fdf4)' : '';
+  });
+}
+
+function pRespSelect(idx) {
+  const u = pRespResults[idx];
+  if (!u) return;
+  window._panelRespUserId = u.id;
+  window._panelRespLinked = true;
+  document.getElementById('panel-resp-name').value              = u.name;
+  document.getElementById('panel-resp-linked-name').textContent = u.name;
+  document.getElementById('panel-resp-badge').style.display     = 'flex';
+  document.getElementById('panel-resp-name').style.display      = 'none';
+  pRespHideDropdown();
+}
+
+function panelRespUnlink(clearText) {
+  window._panelRespUserId = null;
+  window._panelRespLinked = false;
+  document.getElementById('panel-resp-badge').style.display = 'none';
+  const inp = document.getElementById('panel-resp-name');
+  inp.style.display = '';
+  if (clearText !== false) inp.value = '';
+  inp.focus();
+}
+
+function pRespHideDropdown() {
+  const dd = document.getElementById('panel-resp-dropdown');
+  if (dd) { dd.style.display = 'none'; dd.innerHTML = ''; }
+  pRespResults  = [];
+  pRespFocusIdx = -1;
+}
+
+function pRespSpinner(show) {
+  const s = document.getElementById('panel-resp-spinner');
+  if (s) s.style.display = show ? 'block' : 'none';
+}
+
+document.addEventListener('mousedown', function(e) {
+  const wrap = document.getElementById('panel-resp-wrap');
+  const dd   = document.getElementById('panel-resp-dropdown');
+  if (!wrap?.contains(e.target) && !dd?.contains(e.target)) pRespHideDropdown();
+});
+
+function pEsc(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+// ── Save respondent details ─────────────────────────────────────────────────
+function saveRespondent() {
+  const id       = window._panelBlotterId;
+  const uid      = window._panelRespUserId || null;
+  const nameEl   = document.getElementById('panel-resp-name');
+  const name     = nameEl ? nameEl.value.trim() : '';
+  const contact  = (document.getElementById('panel-resp-contact')?.value || '').trim();
+  const location = (document.getElementById('panel-resp-location')?.value || '').trim();
+  const feedback = document.getElementById('panel-resp-feedback');
+
+  if (!id) return;
+
+  feedback.textContent = 'Saving…';
+  feedback.style.color = 'var(--ink-400)';
+
+  fetch('ajax/blotter_action.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action:              'update_respondent',
+      id:                  id,
+      respondent_user_id:  uid,
+      respondent_name:     name,
+      respondent_contact:  contact,
+      incident_location:   location,
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.success) {
+      feedback.textContent = '✓ ' + d.message;
+      feedback.style.color = 'var(--green-600)';
+      showToast(d.message, 'success');
+      // Refresh panel after a short delay
+      setTimeout(function() {
+        fetch('ajax/get_blotter.php?id=' + id)
+          .then(function(r) { return r.json(); })
+          .then(function(res) { if (res.success) renderPanel(res.data); });
+      }, 800);
+    } else {
+      feedback.textContent = '✗ ' + (d.message || 'Save failed.');
+      feedback.style.color = 'var(--rose-600)';
+    }
+  })
+  .catch(function(err) {
+    feedback.textContent = '✗ Request failed: ' + err.message;
+    feedback.style.color = 'var(--rose-600)';
+  });
 }
 
 function viewAttachment(filePath, fileName) {

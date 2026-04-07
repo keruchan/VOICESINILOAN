@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    respondent_user_id, respondent_name, respondent_contact, incident_type, violation_level,
                    incident_date, incident_location, incident_lat, incident_lng,
                    narrative, prescribed_action, status, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'document_only','pending_review',NOW(),NOW())
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending','pending_review',NOW(),NOW())
             ");
             
             $result = $stmt->execute([

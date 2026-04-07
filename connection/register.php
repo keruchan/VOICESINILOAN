@@ -21,12 +21,11 @@ if (isLoggedIn()) {
 $errors  = [];
 $success = '';
 
-// ── Fetch list of barangays for dropdown ──────────────────────
+// ── Fetch list of barangays from barangay_name table ─────────
 $barangays = [];
 try {
-    $barangays = $pdo->query("SELECT id, name, municipality FROM barangays WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
+    $barangays = $pdo->query("SELECT id, name FROM barangay_name ORDER BY name ASC")->fetchAll();
 } catch (PDOException $e) {
-    // Table may not exist yet — silently continue
     error_log('[VOICE2 Register] Could not load barangays: ' . $e->getMessage());
 }
 
@@ -104,8 +103,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $birth_date, $barangay_id
             ]);
 
-            // Redirect to login with a success message
-            redirect('login.php?registered=1');
+            // Show in-page success / pending approval screen
+            $success = $first_name;
 
         } catch (PDOException $e) {
             error_log('[VOICE2 Register] Insert error: ' . $e->getMessage());
@@ -207,6 +206,30 @@ function redirectByRole(string $role): void {
       .right-panel { padding: 28px 20px; }
       .form-row, .form-row3 { grid-template-columns: 1fr; }
     }
+
+    /* ── Pending approval screen ── */
+    .pending-wrap { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 16px 0 8px; }
+    .pending-icon { width: 72px; height: 72px; background: var(--blue-50); border: 2px solid #c3d6fa; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+    .pending-title { font-family: 'DM Serif Display', serif; font-size: 24px; color: var(--gray-900); margin-bottom: 6px; }
+    .pending-name  { font-size: 14px; color: var(--gray-600); margin-bottom: 12px; }
+    .pending-msg   { font-size: 13px; color: var(--gray-600); line-height: 1.75; max-width: 380px; margin-bottom: 28px; }
+
+    .pending-steps { width: 100%; max-width: 360px; text-align: left; margin-bottom: 24px; }
+    .ps-item  { display: flex; align-items: flex-start; gap: 12px; }
+    .ps-dot   { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+    .ps-dot-done   { background: var(--blue-600); }
+    .ps-dot-active { background: var(--blue-400); box-shadow: 0 0 0 4px rgba(55,138,221,0.2); animation: ps-pulse 2s infinite; }
+    .ps-dot-empty  { background: #fff; border: 2px solid var(--gray-200); }
+    @keyframes ps-pulse { 0%,100% { box-shadow: 0 0 0 4px rgba(55,138,221,0.2); } 50% { box-shadow: 0 0 0 7px rgba(55,138,221,0.1); } }
+    .ps-text  { padding-bottom: 4px; }
+    .ps-lbl   { font-size: 13px; font-weight: 600; color: var(--gray-900); }
+    .ps-sub   { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+    .ps-line  { width: 2px; height: 24px; background: var(--gray-200); margin: 4px 0 4px 10px; }
+    .ps-line-half { background: linear-gradient(to bottom, var(--blue-400), var(--gray-200)); }
+
+    .pending-notice { display: flex; align-items: flex-start; gap: 8px; background: var(--blue-50); border: 1px solid #c3d6fa; border-radius: 8px; padding: 11px 14px; font-size: 12px; color: var(--blue-800); line-height: 1.6; max-width: 380px; text-align: left; margin-bottom: 24px; }
+    .btn-back-login { display: inline-block; padding: 10px 24px; background: var(--blue-600); color: #fff; border-radius: 8px; font-size: 13px; font-weight: 500; text-decoration: none; transition: background .12s; }
+    .btn-back-login:hover { background: var(--blue-800); }
   </style>
 </head>
 <body>
@@ -232,6 +255,61 @@ function redirectByRole(string $role): void {
 
   <!-- Right Form -->
   <div class="right-panel">
+
+  <?php if ($success): ?>
+  <!-- ══ PENDING APPROVAL SCREEN ══ -->
+  <div class="pending-wrap">
+    <div class="pending-icon">
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="18" stroke="var(--blue-200)" stroke-width="3"/>
+        <path d="M20 11v10l6 3.5" stroke="var(--blue-600)" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <h2 class="pending-title">You're registered!</h2>
+    <p class="pending-name">Welcome, <strong><?= e($success) ?></strong> 👋</p>
+    <p class="pending-msg">
+      Your account has been created and is now <strong>waiting for barangay approval</strong>.
+      You cannot log in until your information has been verified by a barangay officer.
+    </p>
+
+    <div class="pending-steps">
+      <div class="ps-item">
+        <div class="ps-dot ps-dot-done">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M2 5.5l2.5 2.5 4.5-5"/></svg>
+        </div>
+        <div class="ps-text">
+          <div class="ps-lbl">Account created</div>
+          <div class="ps-sub">Your registration was submitted successfully</div>
+        </div>
+      </div>
+      <div class="ps-line ps-line-half"></div>
+      <div class="ps-item">
+        <div class="ps-dot ps-dot-active"></div>
+        <div class="ps-text">
+          <div class="ps-lbl">Pending barangay review</div>
+          <div class="ps-sub">Your barangay officer will verify your details</div>
+        </div>
+      </div>
+      <div class="ps-line"></div>
+      <div class="ps-item">
+        <div class="ps-dot ps-dot-empty"></div>
+        <div class="ps-text">
+          <div class="ps-lbl">Account activated</div>
+          <div class="ps-sub">You'll receive access once approved</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pending-notice">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--blue-600)" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;margin-top:2px"><circle cx="7" cy="7" r="5.5"/><path d="M7 4.5v3"/><circle cx="7" cy="9.5" r=".5" fill="var(--blue-600)"/></svg>
+      <span>Approval usually takes <strong>1–2 business days</strong>. Visit your barangay hall if you have questions.</span>
+    </div>
+
+    <a href="login.php" class="btn-back-login">← Back to Login</a>
+  </div>
+
+  <?php else: ?>
+  <!-- ══ REGISTRATION FORM ══ -->
     <div class="form-title">Create your account</div>
     <div class="form-subtitle">Community member registration · All fields marked <span style="color:var(--rose-400)">*</span> are required</div>
 
@@ -294,16 +372,16 @@ function redirectByRole(string $role): void {
           <option value="">— Select your barangay —</option>
           <?php foreach ($barangays as $bgy): ?>
           <option value="<?= (int)$bgy['id'] ?>" <?= (($_POST['barangay_id'] ?? '') == $bgy['id']) ? 'selected' : '' ?>>
-            <?= e($bgy['name']) ?><?= $bgy['municipality'] ? ' — ' . e($bgy['municipality']) : '' ?>
+            <?= e($bgy['name']) ?>
           </option>
           <?php endforeach; ?>
           <?php if (empty($barangays)): ?>
-          <!-- Placeholder when DB is not yet connected -->
-          <option value="1">Brgy. Acevida — Siniloan</option>
-          <option value="2">Brgy. Pandeno — Siniloan</option>
-          <option value="3">Brgy. Wawa — Siniloan</option>
+          <option value="" disabled>— No barangays found —</option>
           <?php endif; ?>
         </select>
+        <?php if (empty($barangays)): ?>
+        <div style="font-size:11px;color:var(--rose-400);margin-top:4px">⚠️ Could not load barangay list. Please contact the administrator.</div>
+        <?php endif; ?>
       </div>
 
       <!-- Account Information -->
@@ -332,6 +410,8 @@ function redirectByRole(string $role): void {
     <div class="login-link">
       Already have an account? <a href="login.php">Sign in here</a>
     </div>
+
+  <?php endif; ?>
   </div>
 
 </div>

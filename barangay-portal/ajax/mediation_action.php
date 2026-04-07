@@ -1,250 +1,436 @@
 <?php
-// ajax/mediation_action.php
+// ajax/mediation_action.php — KP Law compliant mediation process
 require_once '../../connection/auth.php';
 guardRole('barangay');
 header('Content-Type: application/json');
 
-$bid   = (int)($_SESSION['barangay_id'] ?? 0);
-$uid   = (int)($_SESSION['user_id']     ?? 0);
+$bid = (int)($_SESSION['barangay_id'] ?? 0);
+$uid = (int)($_SESSION['user_id']     ?? 0);
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
 $act   = $input['action'] ?? '';
 
-function own_blotter_med(PDO $pdo, int $blotter_id, int $bid): bool {
-    $s = $pdo->prepare("SELECT id FROM blotters WHERE id=? AND barangay_id=? LIMIT 1");
-    $s->execute([$blotter_id, $bid]); return (bool)$s->fetch();
-}
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-function log_med(PDO $pdo, int $uid, int $bid, string $action, int $eid, string $desc): void {
+function log_act(PDO $pdo, int $uid, int $bid, string $action, int $blotter_id, string $desc): void {
     try {
         $pdo->prepare("INSERT INTO activity_log(user_id,barangay_id,action,entity_type,entity_id,description,created_at) VALUES(?,?,?,?,?,?,NOW())")
-            ->execute([$uid, $bid, $action, 'blotter', $eid, $desc]);
+            ->execute([$uid, $bid, $action, 'blotter', $blotter_id, $desc]);
     } catch (Exception $e) {}
 }
 
-// Penalty rules by missed session count (applies to no-show party)
-function get_penalty_rule(int $missed_count): array {
-    if ($missed_count >= 3) return ['Failure to appear at mediation (3rd offense)', 2000.00, 16];
-    if ($missed_count === 2) return ['Failure to appear at mediation (2nd offense)', 1000.00, 8];
-    return ['Failure to appear at mediation (1st offense)', 500.00, 4];
+/**
+ * Queue a notification for a party (complainant or respondent).
+ * Notifications sit in party_notifications until an SMS gateway or
+ * print handler picks them up. Registered users also see them in-app.
+ */
+function notify_party(
+    PDO $pdo, int $blotter_id, int $bid, int $uid,
+    string $type,           // notification_type enum
+    string $party,          // 'complainant' | 'respondent'
+    string $name,
+    ?string $contact,
+    ?int $user_id,
+    string $subject,
+    string $message,
+    ?int $med_id = null
+): void {
+    try {
+        $channel = $contact ? 'inapp,sms' : 'inapp';
+        $pdo->prepare("
+            INSERT INTO party_notifications
+              (blotter_id, mediation_schedule_id, barangay_id,
+               recipient_type, recipient_user_id, recipient_name, recipient_contact,
+               notification_type, subject, message, channel, status, created_by, created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,'pending',?,NOW())
+        ")->execute([
+            $blotter_id, $med_id, $bid,
+            $party, $user_id, $name, $contact,
+            $type, $subject, $message, $channel, $uid
+        ]);
+    } catch (PDOException $ex) { error_log('[notify_party] ' . $ex->getMessage()); }
 }
+
+/**
+ * Notify BOTH parties from a single call using blotter contact data.
+ */
+function notify_both(PDO $pdo, array $ms, array $b, int $bid, int $uid, string $type, string $subject, string $comp_msg, string $resp_msg, ?int $med_id = null): void {
+    notify_party($pdo, (int)$b['id'], $bid, $uid, $type, 'complainant',
+        $b['complainant_name'], $b['complainant_contact'] ?? null,
+        $b['complainant_user_id'] ? (int)$b['complainant_user_id'] : null,
+        $subject, $comp_msg, $med_id);
+
+    if ($b['respondent_name'] && $b['respondent_name'] !== 'Unknown') {
+        notify_party($pdo, (int)$b['id'], $bid, $uid, $type, 'respondent',
+            $b['respondent_name'], $b['respondent_contact'] ?? null, null,
+            $subject, $resp_msg, $med_id);
+    }
+}
+
+function fdate(string $d): string { return date('F j, Y', strtotime($d)); }
+function ftime(string $t): string { return date('g:i A', strtotime($t)); }
+
+// ── Fetch full blotter from a mediation schedule ID ──────────────────────────
+function get_ms_and_blotter(PDO $pdo, int $med_id, int $bid): ?array {
+    $s = $pdo->prepare("
+        SELECT ms.*, b.id AS bid, b.case_number, b.complainant_name, b.complainant_contact,
+               b.complainant_user_id, b.respondent_name, b.respondent_contact,
+               b.complainant_missed, b.respondent_missed, b.status AS blotter_status
+        FROM mediation_schedules ms
+        JOIN blotters b ON b.id = ms.blotter_id
+        WHERE ms.id = ? AND b.barangay_id = ?
+        LIMIT 1
+    ");
+    $s->execute([$med_id, $bid]);
+    return $s->fetch() ?: null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 try {
     switch ($act) {
 
-        // ── Schedule new mediation ──────────────────────────────────
-        case 'schedule_mediation':
-            $blotter_id = (int)($input['blotter_id'] ?? 0);
-            $date  = trim($input['date']  ?? '');
-            $time  = trim($input['time']  ?? '');
-            $venue = trim($input['venue'] ?? 'Barangay Hall');
-            $notes = trim($input['notes'] ?? '');
+    // ══════════════════════════════════════════════════════════════════════════
+    // SCHEDULE NEW MEDIATION
+    // ══════════════════════════════════════════════════════════════════════════
+    case 'schedule_mediation':
+        $blotter_id = (int)($input['blotter_id'] ?? 0);
+        $date  = trim($input['date']  ?? '');
+        $time  = trim($input['time']  ?? '');
+        $venue = trim($input['venue'] ?? 'Barangay Hall');
+        $notes = trim($input['notes'] ?? '');
 
-            if (!$blotter_id || !$date || !$time) jsonResponse(false, 'Blotter, date and time are required.');
-            if (!own_blotter_med($pdo, $blotter_id, $bid)) jsonResponse(false, 'Access denied.');
+        if (!$blotter_id || !$date || !$time) jsonResponse(false, 'Blotter, date and time are required.');
 
+        // Verify ownership
+        $bl = $pdo->prepare("SELECT * FROM blotters WHERE id=? AND barangay_id=? LIMIT 1");
+        $bl->execute([$blotter_id, $bid]); $b = $bl->fetch();
+        if (!$b) jsonResponse(false, 'Access denied.');
+
+        $pdo->prepare("
+            INSERT INTO mediation_schedules (blotter_id, barangay_id, hearing_date, hearing_time, venue, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'scheduled', NOW(), NOW())
+        ")->execute([$blotter_id, $bid, $date, $time, $venue]);
+        $new_med_id = (int)$pdo->lastInsertId();
+
+        $pdo->prepare("UPDATE blotters SET status='mediation_set', updated_at=NOW() WHERE id=?")->execute([$blotter_id]);
+
+        $date_fmt = fdate($date); $time_fmt = ftime($time);
+        $comp_msg = "Dear {$b['complainant_name']}, your mediation hearing for case {$b['case_number']} is scheduled on $date_fmt at $time_fmt at $venue. Please make sure to attend.";
+        $resp_msg = "Dear {$b['respondent_name']}, you are required to appear at a mediation hearing for case {$b['case_number']} on $date_fmt at $time_fmt at $venue.";
+        notify_both($pdo, [], $b, $bid, $uid, 'hearing_scheduled', "Mediation Hearing Scheduled — {$b['case_number']}", $comp_msg, $resp_msg, $new_med_id);
+
+        log_act($pdo, $uid, $bid, 'mediation_scheduled', $blotter_id, "Hearing scheduled for $date_fmt at $venue.");
+        jsonResponse(true, "Hearing scheduled for $date_fmt. Both parties notified.");
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // RECORD OUTCOME
+    // ══════════════════════════════════════════════════════════════════════════
+    case 'record_outcome':
+        $med_id  = (int)($input['id'] ?? 0);
+        $status  = in_array($input['status'] ?? '', ['completed','missed','cancelled','rescheduled']) ? $input['status'] : 'completed';
+        $comp    = isset($input['complainant_attended']) ? (int)$input['complainant_attended'] : 1;
+        $resp    = isset($input['respondent_attended'])  ? (int)$input['respondent_attended']  : 1;
+        $outcome = trim($input['outcome']         ?? '');
+        $next    = trim($input['next_steps']      ?? '');
+        $redate  = trim($input['reschedule_date'] ?? '');
+        $retime  = trim($input['reschedule_time'] ?? '');
+
+        if (!$med_id) jsonResponse(false, 'Invalid session ID.');
+
+        $ms = get_ms_and_blotter($pdo, $med_id, $bid);
+        if (!$ms) jsonResponse(false, 'Session not found or access denied.');
+
+        $blotter_id     = (int)$ms['bid'];
+        $case_no        = $ms['case_number'];
+        $comp_missed    = (int)$ms['complainant_missed'];
+        $resp_missed    = (int)$ms['respondent_missed'];
+
+        // ── Auto-correct: if someone absent, override to 'missed' ──────
+        if ($status === 'completed' && (!$comp || !$resp)) {
+            $status = 'missed';
+        }
+
+        // ── Determine absent party ─────────────────────────────────────
+        $no_show_by = 'none';
+        $is_missed  = false;
+        if ($status === 'missed') {
+            $is_missed = true;
+            if (!$comp && !$resp) $no_show_by = 'both';
+            elseif (!$comp)       $no_show_by = 'complainant';
+            else                  $no_show_by = 'respondent';
+        }
+
+        // ── If rescheduled requires a date ────────────────────────────
+        if ($status === 'rescheduled' && !$redate) jsonResponse(false, 'New hearing date is required when rescheduling.');
+
+        // ── Update mediation record ───────────────────────────────────
+        $pdo->prepare("
+            UPDATE mediation_schedules
+            SET status=?, complainant_attended=?, respondent_attended=?,
+                outcome=?, next_steps=?, no_show_by=?,
+                missed_session=?, reschedule_date=?, reschedule_time=?,
+                notified_at=NOW(), updated_at=NOW()
+            WHERE id=?
+        ")->execute([
+            $status, $comp, $resp, $outcome, $next, $no_show_by,
+            $is_missed ? 1 : 0,
+            $redate ?: null, $retime ?: null,
+            $med_id
+        ]);
+
+        // ══════════════════════════════════════════════════════════════
+        // OUTCOME: COMPLETED
+        // ══════════════════════════════════════════════════════════════
+        if ($status === 'completed') {
+            $pdo->prepare("UPDATE blotters SET status='resolved', updated_at=NOW() WHERE id=?")->execute([$blotter_id]);
+            log_act($pdo, $uid, $bid, 'mediation_completed', $blotter_id, "Mediation completed — $case_no. $outcome");
+
+            $msg = "Case $case_no has been successfully resolved through mediation. Thank you for your cooperation.";
+            notify_both($pdo, $ms, $ms, $bid, $uid, 'mediation_completed', "Mediation Completed — $case_no", $msg, $msg, $med_id);
+            jsonResponse(true, 'Mediation completed. Blotter marked resolved. Both parties notified. ✅');
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // OUTCOME: CANCELLED (barangay decision, no attendance issue)
+        // ══════════════════════════════════════════════════════════════
+        if ($status === 'cancelled') {
+            $pdo->prepare("UPDATE blotters SET status='active', updated_at=NOW() WHERE id=?")->execute([$blotter_id]);
+            log_act($pdo, $uid, $bid, 'mediation_cancelled', $blotter_id, "Mediation cancelled — $case_no.");
+
+            $msg = "The mediation hearing for case $case_no has been cancelled by the barangay. You will be notified of further actions.";
+            notify_both($pdo, $ms, $ms, $bid, $uid, 'mediation_cancelled', "Hearing Cancelled — $case_no", $msg, $msg, $med_id);
+            jsonResponse(true, 'Hearing cancelled. Blotter returned to active. Both parties notified.');
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // OUTCOME: RESCHEDULED (barangay decision — NO missed count)
+        // ══════════════════════════════════════════════════════════════
+        if ($status === 'rescheduled') {
+            // Create new scheduled session
             $pdo->prepare("
-                INSERT INTO mediation_schedules
-                  (blotter_id, barangay_id, hearing_date, hearing_time, venue, status, created_at, updated_at)
+                INSERT INTO mediation_schedules (blotter_id, barangay_id, hearing_date, hearing_time, venue, status, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, 'scheduled', NOW(), NOW())
-            ")->execute([$blotter_id, $bid, $date, $time, $venue]);
+            ")->execute([$blotter_id, $bid, $redate, $retime ?: '09:00:00', $ms['venue'] ?: 'Barangay Hall']);
+            $new_id = (int)$pdo->lastInsertId();
 
-            $pdo->prepare("UPDATE blotters SET status='mediation_set', updated_at=NOW() WHERE id=?")
-                ->execute([$blotter_id]);
+            log_act($pdo, $uid, $bid, 'mediation_rescheduled', $blotter_id, "Mediation rescheduled — $case_no to " . fdate($redate) . ".");
 
-            log_med($pdo, $uid, $bid, 'mediation_scheduled', $blotter_id,
-                "Mediation hearing scheduled for " . date('M j, Y', strtotime($date)) . " at $venue");
+            $redate_fmt = fdate($redate);
+            $retime_fmt = $retime ? ftime($retime) : 'TBD';
+            $venue_fmt  = $ms['venue'] ?: 'Barangay Hall';
+            $comp_msg   = "Dear {$ms['complainant_name']}, your mediation hearing for case $case_no has been rescheduled to $redate_fmt at $retime_fmt at $venue_fmt.";
+            $resp_msg   = "Dear {$ms['respondent_name']}, the mediation hearing for case $case_no has been rescheduled to $redate_fmt at $retime_fmt at $venue_fmt.";
+            notify_both($pdo, $ms, $ms, $bid, $uid, 'hearing_rescheduled', "Hearing Rescheduled — $case_no", $comp_msg, $resp_msg, $new_id);
 
-            jsonResponse(true, 'Mediation hearing scheduled for ' . date('F j, Y', strtotime($date)) . '.');
+            jsonResponse(true, "Hearing rescheduled to " . fdate($redate) . ". New session created. Both parties notified.");
+        }
 
-        // ── Record hearing outcome ──────────────────────────────────
-        case 'record_outcome':
-            $id      = (int)($input['id'] ?? 0);
-            $status  = in_array($input['status'] ?? '', ['completed','missed','cancelled','rescheduled'])
-                       ? $input['status'] : 'completed';
-            $comp    = isset($input['complainant_attended']) ? (int)$input['complainant_attended'] : 1;
-            $resp    = isset($input['respondent_attended'])  ? (int)$input['respondent_attended']  : 1;
-            $outcome = trim($input['outcome']         ?? '');
-            $next    = trim($input['next_steps']      ?? '');
-            $redate  = trim($input['reschedule_date'] ?? '');
-            $retime  = trim($input['reschedule_time'] ?? '');
+        // ══════════════════════════════════════════════════════════════
+        // OUTCOME: MISSED (no-show — apply KP Law consequences)
+        // ══════════════════════════════════════════════════════════════
+        if ($status === 'missed') {
 
-            if (!$id) jsonResponse(false, 'Invalid ID.');
+            $new_comp_missed = $comp_missed + ($no_show_by === 'complainant' || $no_show_by === 'both' ? 1 : 0);
+            $new_resp_missed = $resp_missed + ($no_show_by === 'respondent' || $no_show_by === 'both' ? 1 : 0);
 
-            // Verify this hearing belongs to this barangay
-            $ms_row = $pdo->prepare("
-                SELECT ms.*, b.id AS blotter_id, b.case_number, b.complainant_name, b.respondent_name
-                FROM mediation_schedules ms
-                JOIN blotters b ON b.id = ms.blotter_id
-                WHERE ms.id = ? AND b.barangay_id = ? LIMIT 1
-            ");
-            $ms_row->execute([$id, $bid]);
-            $ms = $ms_row->fetch();
-            if (!$ms) jsonResponse(false, 'Access denied or session not found.');
+            // Update missed counters on blotter
+            $pdo->prepare("UPDATE blotters SET complainant_missed=?, respondent_missed=?, updated_at=NOW() WHERE id=?")
+                ->execute([$new_comp_missed, $new_resp_missed, $blotter_id]);
 
-            // ── Determine who is absent / no_show_by ──
-            $no_show_by   = 'none';
-            $is_missed    = false;
-            $penalty_party = null; // user_id or name of who gets penalised
+            $action_taken = '';
+            $blotter_new_status = null;
+            $return_msg = '';
 
-            if ($status === 'missed') {
-                $is_missed = true;
-                if (!$comp && !$resp) $no_show_by = 'both';
-                elseif (!$comp)       $no_show_by = 'complainant';
-                elseif (!$resp)       $no_show_by = 'respondent';
-                else                  $no_show_by = 'both'; // both marked present but status forced missed — treat as both
+            // ── BOTH ABSENT ──────────────────────────────────────────
+            if ($no_show_by === 'both') {
+                // Any occurrence of both absent = case dismissed/abandoned
+                $blotter_new_status = 'dismissed';
+                $pdo->prepare("UPDATE mediation_schedules SET action_issued=1, action_type='dismissed' WHERE id=?")->execute([$med_id]);
+                $action_taken = 'dismissed';
+
+                $msg = "Case $case_no has been dismissed due to the absence of both parties. If you wish to pursue this matter, a new complaint must be filed.";
+                notify_both($pdo, $ms, $ms, $bid, $uid, 'case_dismissed', "Case Dismissed — $case_no", $msg, $msg, $med_id);
+
+                log_act($pdo, $uid, $bid, 'case_dismissed', $blotter_id, "Case dismissed — both parties absent. $case_no.");
+                $return_msg = "Both parties absent. Case $case_no dismissed/abandoned. Both notified. To pursue, a new complaint must be filed.";
             }
 
-            // Auto-correct: if someone is absent, override to missed
-            if ($status === 'completed' && (!$comp || !$resp)) {
-                $status = 'missed';
-                $is_missed = true;
-                $no_show_by = (!$comp && !$resp) ? 'both' : (!$comp ? 'complainant' : 'respondent');
-            }
+            // ── COMPLAINANT ABSENT ───────────────────────────────────
+            elseif ($no_show_by === 'complainant') {
+                if ($new_comp_missed === 1) {
+                    // 1st miss: reschedule with notification
+                    if ($redate) {
+                        $pdo->prepare("
+                            INSERT INTO mediation_schedules (blotter_id, barangay_id, hearing_date, hearing_time, venue, status, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, 'scheduled', NOW(), NOW())
+                        ")->execute([$blotter_id, $bid, $redate, $retime ?: '09:00:00', $ms['venue'] ?: 'Barangay Hall']);
+                        $new_id2 = (int)$pdo->lastInsertId();
+                        $pdo->prepare("UPDATE mediation_schedules SET action_issued=1, action_type='rescheduled_1st' WHERE id=?")->execute([$med_id]);
 
-            // ── Update the mediation record ──
-            $pdo->prepare("
-                UPDATE mediation_schedules
-                SET status = ?, complainant_attended = ?, respondent_attended = ?,
-                    outcome = ?, next_steps = ?, no_show_by = ?,
-                    missed_session = ?, reschedule_date = ?, reschedule_time = ?,
-                    notified_at = NOW(), updated_at = NOW()
-                WHERE id = ?
-            ")->execute([
-                $status, $comp, $resp, $outcome, $next, $no_show_by,
-                $is_missed ? 1 : 0,
-                $redate ?: null, $retime ?: null,
-                $id
-            ]);
+                        $redate_fmt = fdate($redate); $retime_fmt = $retime ? ftime($retime) : 'TBD';
+                        $comp_warn  = "Dear {$ms['complainant_name']}, you failed to appear at the mediation hearing for case $case_no. This is your FIRST missed session. A new hearing has been scheduled on $redate_fmt at $retime_fmt. A second absence may result in case dismissal. Please attend.";
+                        $resp_info  = "Dear {$ms['respondent_name']}, the complainant did not appear at today's hearing for case $case_no. The hearing has been rescheduled to $redate_fmt at $retime_fmt.";
 
-            $blotter_id = (int)$ms['blotter_id'];
+                        notify_party($pdo, $blotter_id, $bid, $uid, 'no_show_warning', 'complainant', $ms['complainant_name'], $ms['complainant_contact'] ?? null, $ms['complainant_user_id'] ? (int)$ms['complainant_user_id'] : null, "⚠️ Missed Hearing Warning — $case_no", $comp_warn, $new_id2);
+                        notify_party($pdo, $blotter_id, $bid, $uid, 'hearing_rescheduled', 'respondent', $ms['respondent_name'], $ms['respondent_contact'] ?? null, null, "Hearing Rescheduled — $case_no", $resp_info, $new_id2);
 
-            // ── Handle each outcome ──────────────────────────────────
+                        log_act($pdo, $uid, $bid, 'complainant_no_show_1', $blotter_id, "Complainant 1st miss — $case_no. Rescheduled to $redate_fmt.");
+                        $return_msg = "Complainant absent (1st time). Warning sent. New hearing scheduled for $redate_fmt.";
+                    } else {
+                        $return_msg = "Complainant absent (1st time). Warning recorded. Schedule a new hearing date.";
+                        log_act($pdo, $uid, $bid, 'complainant_no_show_1', $blotter_id, "Complainant 1st miss — $case_no. No reschedule date set.");
+                    }
+                } else {
+                    // 2nd+ miss: case dismissed — complainant barred from refiling same case in court
+                    $blotter_new_status = 'dismissed';
+                    $pdo->prepare("UPDATE mediation_schedules SET action_issued=1, action_type='dismissed' WHERE id=?")->execute([$med_id]);
+                    $action_taken = 'dismissed';
 
-            if ($status === 'completed') {
-                // Resolve blotter
-                $pdo->prepare("UPDATE blotters SET status='resolved', updated_at=NOW() WHERE id=?")
-                    ->execute([$blotter_id]);
-                log_med($pdo, $uid, $bid, 'mediation_completed', $blotter_id,
-                    "Mediation completed for {$ms['case_number']}. $outcome");
-                jsonResponse(true, 'Hearing marked as completed. Blotter resolved. ✅');
-            }
+                    $comp_msg = "Dear {$ms['complainant_name']}, case $case_no has been dismissed due to your repeated failure to appear at mediation hearings. You are barred from filing this same case in court (Section 412, Local Government Code).";
+                    $resp_msg = "Dear {$ms['respondent_name']}, case $case_no has been dismissed. The complainant failed to attend scheduled hearings. No further action is required from you at this time.";
 
-            if ($status === 'cancelled') {
-                // Revert blotter to active (don't leave as mediation_set)
-                $pdo->prepare("UPDATE blotters SET status='active', updated_at=NOW() WHERE id=?")
-                    ->execute([$blotter_id]);
-                log_med($pdo, $uid, $bid, 'mediation_cancelled', $blotter_id,
-                    "Mediation cancelled for {$ms['case_number']}.");
-                jsonResponse(true, 'Mediation cancelled. Blotter returned to active.');
-            }
+                    notify_party($pdo, $blotter_id, $bid, $uid, 'case_dismissed', 'complainant', $ms['complainant_name'], $ms['complainant_contact'] ?? null, $ms['complainant_user_id'] ? (int)$ms['complainant_user_id'] : null, "Case Dismissed — $case_no", $comp_msg, $med_id);
+                    notify_party($pdo, $blotter_id, $bid, $uid, 'case_dismissed', 'respondent',  $ms['respondent_name'],  $ms['respondent_contact']  ?? null, null, "Case Dismissed — $case_no", $resp_msg, $med_id);
 
-            if ($status === 'rescheduled') {
-                // Create a NEW scheduled session for the reschedule date
-                if ($redate) {
-                    $pdo->prepare("
-                        INSERT INTO mediation_schedules
-                          (blotter_id, barangay_id, hearing_date, hearing_time, venue, status, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, 'scheduled', NOW(), NOW())
-                    ")->execute([$blotter_id, $bid, $redate, $retime ?: '09:00:00', $ms['venue'] ?: 'Barangay Hall']);
+                    log_act($pdo, $uid, $bid, 'case_dismissed', $blotter_id, "Case dismissed — complainant 2nd miss. Barred from refiling. $case_no.");
+                    $return_msg = "Complainant absent (2nd time). Case $case_no dismissed. Complainant barred from filing same case in court. Both parties notified.";
                 }
-                log_med($pdo, $uid, $bid, 'mediation_rescheduled', $blotter_id,
-                    "Mediation rescheduled for {$ms['case_number']}" . ($redate ? " to " . date('M j, Y', strtotime($redate)) : '') . ".");
-                jsonResponse(true, 'Mediation rescheduled' . ($redate ? ' to ' . date('F j, Y', strtotime($redate)) : '') . '. New hearing created.');
             }
 
-            if ($status === 'missed') {
-                // Count total missed sessions for this blotter
-                $missed_count = (int)$pdo->query("
-                    SELECT COUNT(*) FROM mediation_schedules
-                    WHERE blotter_id = $blotter_id AND missed_session = 1
-                ")->fetchColumn();
+            // ── RESPONDENT ABSENT ────────────────────────────────────
+            elseif ($no_show_by === 'respondent') {
+                if ($new_resp_missed === 1) {
+                    // 1st miss: reschedule with warning to respondent
+                    if ($redate) {
+                        $pdo->prepare("
+                            INSERT INTO mediation_schedules (blotter_id, barangay_id, hearing_date, hearing_time, venue, status, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, 'scheduled', NOW(), NOW())
+                        ")->execute([$blotter_id, $bid, $redate, $retime ?: '09:00:00', $ms['venue'] ?: 'Barangay Hall']);
+                        $new_id3 = (int)$pdo->lastInsertId();
+                        $pdo->prepare("UPDATE mediation_schedules SET action_issued=1, action_type='rescheduled_1st' WHERE id=?")->execute([$med_id]);
 
-                // Update violation missed_hearings counter (if violation record exists)
-                $pdo->prepare("
-                    UPDATE violations SET missed_hearings = ?,
-                    risk_score = LEAST(100, risk_score + 15), updated_at = NOW()
-                    WHERE blotter_id = ?
-                ")->execute([$missed_count, $blotter_id]);
+                        $redate_fmt = fdate($redate); $retime_fmt = $retime ? ftime($retime) : 'TBD';
+                        $resp_warn  = "Dear {$ms['respondent_name']}, you failed to appear at the mediation hearing for case $case_no. This is your FIRST missed session. A new hearing has been scheduled on $redate_fmt at $retime_fmt. A second absence may result in a Certification to File Action (CFA) being issued to the complainant, allowing them to pursue this case in court.";
+                        $comp_info  = "Dear {$ms['complainant_name']}, the respondent did not appear at today's hearing for case $case_no. The hearing has been rescheduled to $redate_fmt at $retime_fmt.";
 
-                // Auto-issue penalty
-                [$reason, $amount, $csh] = get_penalty_rule($missed_count);
-                $due_date = date('Y-m-d', strtotime('+15 days'));
+                        notify_party($pdo, $blotter_id, $bid, $uid, 'no_show_warning', 'respondent',  $ms['respondent_name'],  $ms['respondent_contact']  ?? null, null, "⚠️ Final Warning — $case_no", $resp_warn, $new_id3);
+                        notify_party($pdo, $blotter_id, $bid, $uid, 'hearing_rescheduled', 'complainant', $ms['complainant_name'], $ms['complainant_contact'] ?? null, $ms['complainant_user_id'] ? (int)$ms['complainant_user_id'] : null, "Hearing Rescheduled — $case_no", $comp_info, $new_id3);
 
-                $pdo->prepare("
-                    INSERT INTO penalties
-                      (blotter_id, barangay_id, mediation_schedule_id, missed_party,
-                       reason, amount, community_hours, due_date, status, issued_by, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NOW())
-                ")->execute([
-                    $blotter_id, $bid, $id, $no_show_by,
-                    $reason, $amount, $csh, $due_date, $uid
-                ]);
+                        log_act($pdo, $uid, $bid, 'respondent_no_show_1', $blotter_id, "Respondent 1st miss — $case_no. Rescheduled to $redate_fmt.");
+                        $return_msg = "Respondent absent (1st time). Warning sent. New hearing scheduled for $redate_fmt.";
+                    } else {
+                        $return_msg = "Respondent absent (1st time). Warning recorded. Schedule a new hearing date.";
+                        log_act($pdo, $uid, $bid, 'respondent_no_show_1', $blotter_id, "Respondent 1st miss — $case_no. No reschedule date set.");
+                    }
+                } else {
+                    // 2nd+ miss: issue CFA — complainant may now file in court
+                    $blotter_new_status = 'cfa_issued';
+                    $pdo->prepare("UPDATE mediation_schedules SET action_issued=1, action_type='cfa_issued' WHERE id=?")->execute([$med_id]);
+                    $action_taken = 'cfa_issued';
 
-                // Mark penalty issued on the mediation record
-                $pdo->prepare("UPDATE mediation_schedules SET penalty_issued=1 WHERE id=?")
-                    ->execute([$id]);
+                    $comp_msg = "Dear {$ms['complainant_name']}, the respondent has repeatedly failed to appear at mediation hearings for case $case_no. The Barangay is issuing a Certification to File Action (CFA) in your favor. You may now bring this case to the proper court or government office.";
+                    $resp_msg = "Dear {$ms['respondent_name']}, you have failed to appear at multiple scheduled mediation hearings for case $case_no. A Certification to File Action (CFA) has been issued to the complainant. This allows them to file the case in court.";
 
-                // Escalate blotter if 3+ misses
-                if ($missed_count >= 3) {
-                    $pdo->prepare("UPDATE blotters SET status='escalated', updated_at=NOW() WHERE id=?")
-                        ->execute([$blotter_id]);
-                    log_med($pdo, $uid, $bid, 'blotter_escalated', $blotter_id,
-                        "Auto-escalated: {$ms['case_number']} has $missed_count missed mediations.");
+                    notify_party($pdo, $blotter_id, $bid, $uid, 'cfa_issued', 'complainant', $ms['complainant_name'], $ms['complainant_contact'] ?? null, $ms['complainant_user_id'] ? (int)$ms['complainant_user_id'] : null, "CFA Issued — $case_no", $comp_msg, $med_id);
+                    notify_party($pdo, $blotter_id, $bid, $uid, 'cfa_issued', 'respondent',  $ms['respondent_name'],  $ms['respondent_contact']  ?? null, null, "CFA Issued — $case_no", $resp_msg, $med_id);
+
+                    log_act($pdo, $uid, $bid, 'cfa_issued', $blotter_id, "CFA issued — respondent 2nd miss. $case_no. Complainant may file in court.");
+                    $return_msg = "Respondent absent (2nd time). CFA issued to complainant. They may now file in court. Both parties notified.";
                 }
-
-                $who_label = ['complainant'=>'complainant','respondent'=>'respondent','both'=>'both parties'][$no_show_by] ?? 'absent party';
-                log_med($pdo, $uid, $bid, 'mediation_no_show', $blotter_id,
-                    "No show recorded for {$ms['case_number']} (miss #{$missed_count}). $no_show_by absent. Penalty ₱{$amount} issued.");
-
-                $msg = "No show recorded. Penalty ₱" . number_format($amount) . " issued to $who_label.";
-                if ($missed_count >= 3) $msg .= " ⚠️ Case auto-escalated after 3 misses.";
-                jsonResponse(true, $msg);
             }
 
-            jsonResponse(true, 'Outcome recorded.');
+            // Update blotter status if changed
+            if ($blotter_new_status) {
+                $pdo->prepare("UPDATE blotters SET status=?, updated_at=NOW() WHERE id=?")
+                    ->execute([$blotter_new_status, $blotter_id]);
+            }
 
-        // ── Cancel a hearing (no-show flag NOT set) ─────────────────
-        case 'cancel':
-            $id = (int)($input['id'] ?? 0);
-            if (!$id) jsonResponse(false, 'Invalid ID.');
-            $pdo->prepare("UPDATE mediation_schedules SET status='cancelled', updated_at=NOW() WHERE id=?")
-                ->execute([$id]);
-            // Revert blotter
-            $r = $pdo->prepare("SELECT blotter_id FROM mediation_schedules WHERE id=? LIMIT 1");
-            $r->execute([$id]); $row = $r->fetch();
-            if ($row) $pdo->prepare("UPDATE blotters SET status='active', updated_at=NOW() WHERE id=?")->execute([$row['blotter_id']]);
-            jsonResponse(true, 'Mediation cancelled. Blotter returned to active.');
+            jsonResponse(true, $return_msg);
+        }
 
-        // ── Manually issue penalty from History tab ─────────────────
-        case 'issue_penalty':
-            $med_id   = (int)($input['med_id']  ?? 0);
-            $party    = in_array($input['party']??'',['complainant','respondent','both']) ? $input['party'] : 'respondent';
-            $amount   = max(0, (float)($input['amount']   ?? 500));
-            $csh      = max(0, (int)  ($input['csh']      ?? 0));
-            $due_date = trim($input['due_date'] ?? date('Y-m-d', strtotime('+15 days')));
-            $reason   = trim($input['reason']   ?? 'Failure to appear at scheduled mediation hearing');
-            if (!$med_id) jsonResponse(false, 'Invalid ID.');
+        jsonResponse(true, 'Outcome recorded.');
 
-            $ms2 = $pdo->prepare("SELECT blotter_id FROM mediation_schedules WHERE id=? LIMIT 1");
-            $ms2->execute([$med_id]); $ms2_row = $ms2->fetch();
-            if (!$ms2_row) jsonResponse(false, 'Session not found.');
+    // ══════════════════════════════════════════════════════════════════════════
+    // CANCEL (barangay decision — no attendance issue)
+    // ══════════════════════════════════════════════════════════════════════════
+    case 'cancel':
+        $med_id = (int)($input['id'] ?? 0);
+        if (!$med_id) jsonResponse(false, 'Invalid ID.');
+        $ms = get_ms_and_blotter($pdo, $med_id, $bid);
+        if (!$ms) jsonResponse(false, 'Not found.');
+        $blotter_id = (int)$ms['bid'];
 
-            $bid2 = (int)$pdo->query("SELECT barangay_id FROM blotters WHERE id={$ms2_row['blotter_id']} LIMIT 1")->fetchColumn();
-            if ($bid2 !== $bid) jsonResponse(false, 'Access denied.');
+        $pdo->prepare("UPDATE mediation_schedules SET status='cancelled', updated_at=NOW() WHERE id=?")->execute([$med_id]);
+        $pdo->prepare("UPDATE blotters SET status='active', updated_at=NOW() WHERE id=?")->execute([$blotter_id]);
 
-            $pdo->prepare("
-                INSERT INTO penalties
-                  (blotter_id, barangay_id, mediation_schedule_id, missed_party,
-                   reason, amount, community_hours, due_date, status, issued_by, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NOW())
-            ")->execute([$ms2_row['blotter_id'], $bid, $med_id, $party, $reason, $amount, $csh, $due_date, $uid]);
+        $msg = "The mediation hearing for case {$ms['case_number']} has been cancelled. You will be notified of further actions.";
+        notify_both($pdo, $ms, $ms, $bid, $uid, 'mediation_cancelled', "Hearing Cancelled — {$ms['case_number']}", $msg, $msg, $med_id);
 
-            $pdo->prepare("UPDATE mediation_schedules SET penalty_issued=1 WHERE id=?")->execute([$med_id]);
+        log_act($pdo, $uid, $bid, 'mediation_cancelled', $blotter_id, "Hearing cancelled — {$ms['case_number']}.");
+        jsonResponse(true, 'Hearing cancelled. Blotter returned to active. Both parties notified.');
 
-            jsonResponse(true, "Penalty of ₱" . number_format($amount) . " issued to $party.");
+    // ══════════════════════════════════════════════════════════════════════════
+    // ADJUST MISSED COUNT (manual correction with reason — emergencies, etc.)
+    // ══════════════════════════════════════════════════════════════════════════
+    case 'adjust_missed':
+        $blotter_id   = (int)($input['blotter_id']      ?? 0);
+        $comp_missed  = max(0, (int)($input['comp_missed'] ?? 0));
+        $resp_missed  = max(0, (int)($input['resp_missed'] ?? 0));
+        $reason       = trim($input['reason'] ?? '');
 
-        default:
-            jsonResponse(false, 'Unknown action.');
+        if (!$blotter_id) jsonResponse(false, 'Invalid blotter ID.');
+        if (!$reason)     jsonResponse(false, 'A reason is required for manual adjustment.');
+
+        // Verify ownership
+        $own = $pdo->prepare("SELECT id FROM blotters WHERE id=? AND barangay_id=? LIMIT 1");
+        $own->execute([$blotter_id, $bid]);
+        if (!$own->fetch()) jsonResponse(false, 'Access denied.');
+
+        $pdo->prepare("UPDATE blotters SET complainant_missed=?, respondent_missed=?, updated_at=NOW() WHERE id=?")
+            ->execute([$comp_missed, $resp_missed, $blotter_id]);
+
+        log_act($pdo, $uid, $bid, 'missed_count_adjusted', $blotter_id,
+            "Missed counts manually adjusted. Complainant: $comp_missed, Respondent: $resp_missed. Reason: $reason");
+
+        jsonResponse(true, 'Missed session counts updated. Adjustment logged.');
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SEND MANUAL NOTIFICATION to one or both parties
+    // ══════════════════════════════════════════════════════════════════════════
+    case 'send_notification':
+        $blotter_id = (int)($input['blotter_id'] ?? 0);
+        $party      = $input['party'] ?? 'both'; // 'complainant' | 'respondent' | 'both'
+        $subject    = trim($input['subject'] ?? '');
+        $message    = trim($input['message'] ?? '');
+        if (!$blotter_id || !$subject || !$message) jsonResponse(false, 'Blotter, subject and message are required.');
+
+        $bl = $pdo->prepare("SELECT * FROM blotters WHERE id=? AND barangay_id=? LIMIT 1");
+        $bl->execute([$blotter_id, $bid]); $b = $bl->fetch();
+        if (!$b) jsonResponse(false, 'Access denied.');
+
+        $count = 0;
+        if ($party !== 'respondent') {
+            notify_party($pdo, $blotter_id, $bid, $uid, 'general', 'complainant', $b['complainant_name'], $b['complainant_contact'] ?? null, $b['complainant_user_id'] ? (int)$b['complainant_user_id'] : null, $subject, $message);
+            $count++;
+        }
+        if ($party !== 'complainant' && $b['respondent_name'] && $b['respondent_name'] !== 'Unknown') {
+            notify_party($pdo, $blotter_id, $bid, $uid, 'general', 'respondent', $b['respondent_name'], $b['respondent_contact'] ?? null, null, $subject, $message);
+            $count++;
+        }
+        jsonResponse(true, "Notification queued for $count party/parties.");
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // MARK NOTIFICATION AS SENT (for SMS gateway or print handler)
+    // ══════════════════════════════════════════════════════════════════════════
+    case 'mark_notif_sent':
+        $notif_id = (int)($input['notif_id'] ?? 0);
+        if (!$notif_id) jsonResponse(false, 'Invalid ID.');
+        $pdo->prepare("UPDATE party_notifications SET status='sent', sent_at=NOW() WHERE id=?")
+            ->execute([$notif_id]);
+        jsonResponse(true, 'Notification marked as sent.');
+
+    default:
+        jsonResponse(false, 'Unknown action.');
     }
 
 } catch (PDOException $e) {

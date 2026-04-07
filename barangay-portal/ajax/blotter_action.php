@@ -174,4 +174,75 @@ if ($action === 'update_status') {
     exit;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTION: update_respondent — officer edits respondent name, contact, location
+// ─────────────────────────────────────────────────────────────────────────────
+if ($action === 'update_respondent') {
+    $id            = (int)($data['id']                  ?? 0);
+    $resp_uid      = isset($data['respondent_user_id']) && $data['respondent_user_id'] !== null
+                     ? (int)$data['respondent_user_id'] : null;
+    $resp_name     = trim($data['respondent_name']      ?? '');
+    $resp_contact  = trim($data['respondent_contact']   ?? '');
+    $location      = trim($data['incident_location']    ?? '');
+
+    if (!$id) { echo json_encode(['success'=>false,'message'=>'Invalid blotter ID.']); exit; }
+
+    try {
+        // Verify the blotter belongs to this barangay
+        $check = $pdo->prepare("SELECT id FROM blotters WHERE id = ? AND barangay_id = ? LIMIT 1");
+        $check->execute([$id, $bid]);
+        if (!$check->fetch()) {
+            echo json_encode(['success'=>false,'message'=>'Blotter not found or access denied.']);
+            exit;
+        }
+
+        $sets   = ['respondent_name = ?', 'respondent_contact = ?', 'updated_at = NOW()'];
+        $values = [$resp_name, $resp_contact];
+
+        // Only update respondent_user_id if column exists — catch gracefully
+        $sets[]   = 'respondent_user_id = ?';
+        $values[] = $resp_uid;
+
+        if ($location !== '') {
+            $sets[]   = 'incident_location = ?';
+            $values[] = $location;
+        }
+
+        $values[] = $id;
+
+        try {
+            $pdo->prepare("UPDATE blotters SET " . implode(', ', $sets) . " WHERE id = ?")
+                ->execute($values);
+        } catch (PDOException $colErr) {
+            // respondent_user_id column may not exist yet — retry without it
+            $sets2   = ['respondent_name = ?', 'respondent_contact = ?', 'updated_at = NOW()'];
+            $values2 = [$resp_name, $resp_contact];
+            if ($location !== '') { $sets2[] = 'incident_location = ?'; $values2[] = $location; }
+            $values2[] = $id;
+            $pdo->prepare("UPDATE blotters SET " . implode(', ', $sets2) . " WHERE id = ?")
+                ->execute($values2);
+        }
+
+        // Activity log
+        $parts = [];
+        if ($resp_name)    $parts[] = 'Respondent: ' . $resp_name;
+        if ($resp_contact) $parts[] = 'Contact: ' . $resp_contact;
+        if ($location)     $parts[] = 'Location: ' . $location;
+        if ($resp_uid)     $parts[] = 'Linked to user ID: ' . $resp_uid;
+        $desc = 'Respondent details updated' . ($parts ? ' — ' . implode(', ', $parts) : '');
+
+        try {
+            $pdo->prepare("INSERT INTO activity_log(user_id,barangay_id,action,entity_type,entity_id,description,created_at) VALUES(?,?,'respondent_updated','blotter',?,?,NOW())")
+                ->execute([$uid, $bid, $id, $desc]);
+        } catch (Exception $ex) {}
+
+        echo json_encode(['success' => true, 'message' => 'Respondent details saved.']);
+
+    } catch (PDOException $e) {
+        error_log('blotter_action update_respondent: ' . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'DB error: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
 echo json_encode(['success'=>false,'message'=>'Unknown action: '.$action]);
