@@ -76,8 +76,10 @@ if (!empty($all_against_ids)) {
             SELECT ms.*, b.case_number, b.complainant_name
             FROM mediation_schedules ms
             JOIN blotters b ON b.id = ms.blotter_id
-            WHERE ms.blotter_id IN ($in) AND ms.status='scheduled' AND ms.hearing_date >= CURDATE()
-            ORDER BY ms.hearing_date ASC
+            WHERE ms.blotter_id IN ($in)
+              AND ms.status = 'scheduled'
+              AND CONCAT(ms.hearing_date, ' ', COALESCE(ms.hearing_time, '23:59:59')) > NOW()
+            ORDER BY ms.hearing_date ASC, ms.hearing_time ASC
         ")->fetchAll();
     } catch (PDOException $e) {}
 }
@@ -101,12 +103,15 @@ $total = count($direct_cases) + count($name_cases);
 
 <!-- ── Upcoming hearings I must attend ── -->
 <?php if (!empty($my_hearings)): ?>
-<div class="alert alert-amber mb16">
-  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="var(--amber-600)" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;margin-top:1px"><rect x="2" y="3" width="14" height="13" rx="2"/><path d="M2 7.5h14M6 3V1.5M12 3V1.5"/></svg>
-  <div class="alert-text">
+<div class="alert alert-amber mb16" style="align-items:center">
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="var(--amber-600)" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0"><rect x="2" y="3" width="14" height="13" rx="2"/><path d="M2 7.5h14M6 3V1.5M12 3V1.5"/></svg>
+  <div class="alert-text" style="flex:1">
     <strong>You have <?= count($my_hearings) ?> upcoming mediation hearing(s) you must attend</strong>
     <span>Missing a hearing may result in legal consequences. See below for details.</span>
   </div>
+  <a href="?page=mediation" class="btn btn-outline btn-sm" style="flex-shrink:0;border-color:var(--amber-400);color:var(--amber-600);white-space:nowrap">
+    📅 View Schedule
+  </a>
 </div>
 <div class="g2 mb22">
   <?php foreach ($my_hearings as $h): ?>
