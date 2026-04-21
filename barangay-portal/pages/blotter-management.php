@@ -63,7 +63,7 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
 <!-- Status tabs -->
 <div class="tab-bar" style="margin-bottom:0;border-bottom:none">
   <?php
-  $tabs = [''=>'All','pending_review'=>'Pending','active'=>'Active','mediation_set'=>'Mediation Set','resolved'=>'Resolved','closed'=>'Closed','escalated'=>'Escalated'];
+  $tabs = [''=>'All','pending_review'=>'Pending','active'=>'Active','mediation_set'=>'Mediation Set','resolved'=>'Resolved','deliberation'=>'Deliberation','transferred'=>'Transferred','closed'=>'Closed','escalated'=>'Escalated'];
   foreach ($tabs as $val => $lbl):
     $cnt = $val === '' ? ($tab_counts['all']??0) : ($tab_counts[$val]??0);
   ?>

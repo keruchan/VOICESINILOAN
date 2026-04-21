@@ -4,102 +4,1716 @@
 <head>
   <meta charset="utf-8">
   <meta content="width=device-width, initial-scale=1.0" name="viewport">
-  <title>VOICE - Barangay Complain Management System</title>
-  <meta name="description" content="">
-  <meta name="keywords" content="">
+  <title>VOICE — Barangay Complaint Management System | Paete, Laguna</title>
+  <meta name="description" content="VOICE is a community-driven digital platform for filing, tracking, and resolving barangay complaints in Paete, Laguna, Philippines.">
+  <meta name="keywords" content="barangay, blotter, complaint, Paete, Laguna, KP Law, mediation, community">
 
-  <!-- Favicons -->
   <link href="assets/img/favicon.png" rel="icon">
   <link href="assets/img/apple-touch-icon.png" rel="apple-touch-icon">
 
-  <!-- Fonts -->
   <link href="https://fonts.googleapis.com" rel="preconnect">
   <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&family=Raleway:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-  <!-- Vendor CSS Files -->
   <link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
   <link href="assets/vendor/aos/aos.css" rel="stylesheet">
-  <link href="assets/vendor/glightbox/css/glightbox.min.css" rel="stylesheet">
-  <link href="assets/vendor/swiper/swiper-bundle.min.css" rel="stylesheet">
 
-  <!-- Main CSS File -->
-  <link href="assets/css/main.css" rel="stylesheet">
+  <style>
+    /* ══════════════════════════════════════════
+       CSS VARIABLES & RESET
+    ══════════════════════════════════════════ */
+    :root {
+      --navy:       #0B1F3A;
+      --navy-mid:   #152d52;
+      --navy-light: #1e3d6e;
+      --gold:       #C9A84C;
+      --gold-light: #e2c47a;
+      --gold-pale:  #f5e9c8;
+      --cream:      #F9F5EE;
+      --cream-dark: #EDE7D8;
+      --ink:        #1a1a2e;
+      --ink-light:  #445;
+      --white:      #ffffff;
+      --red-accent: #8B2635;
+
+      --font-display: 'Playfair Display', Georgia, serif;
+      --font-body:    'DM Sans', sans-serif;
+      --font-mono:    'DM Mono', monospace;
+
+      --shadow-sm:  0 2px 8px rgba(11,31,58,.08);
+      --shadow-md:  0 8px 32px rgba(11,31,58,.14);
+      --shadow-lg:  0 20px 60px rgba(11,31,58,.22);
+      --r:          6px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--cream);
+      color: var(--ink);
+      overflow-x: hidden;
+      line-height: 1.7;
+    }
+
+    /* ══════════════════════════════════════════
+       SCROLLBAR
+    ══════════════════════════════════════════ */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--cream-dark); }
+    ::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 3px; }
+
+    /* ══════════════════════════════════════════
+       HEADER / NAV
+    ══════════════════════════════════════════ */
+    #header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+      padding: 0 0;
+      transition: background .35s, box-shadow .35s, padding .35s;
+    }
+    #header.scrolled {
+      background: rgba(11,31,58,.97);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 2px 24px rgba(0,0,0,.35);
+      padding: 0;
+    }
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 20px 32px;
+      transition: padding .35s;
+    }
+    #header.scrolled .header-inner { padding: 14px 32px; }
+
+    .logo-wrap { display: flex; align-items: center; gap: 14px; text-decoration: none; }
+    .logo-badge {
+      width: 40px; height: 40px;
+      background: var(--gold);
+      color: var(--navy);
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 4px;
+      flex-shrink: 0;
+      letter-spacing: -.5px;
+    }
+    .logo-text { display: flex; flex-direction: column; line-height: 1; }
+    .logo-name {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--white);
+      letter-spacing: .02em;
+    }
+    .logo-sub {
+      font-size: 10px;
+      color: var(--gold-light);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .nav-links { display: flex; align-items: center; gap: 6px; list-style: none; }
+    .nav-links a {
+      display: block;
+      padding: 8px 16px;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: rgba(255,255,255,.75);
+      text-decoration: none;
+      border-radius: var(--r);
+      letter-spacing: .02em;
+      transition: color .2s, background .2s;
+    }
+    .nav-links a:hover, .nav-links a.active {
+      color: var(--white);
+      background: rgba(255,255,255,.08);
+    }
+
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 22px;
+      background: var(--gold);
+      color: var(--navy) !important;
+      font-weight: 700;
+      font-size: 13.5px;
+      border-radius: var(--r);
+      text-decoration: none;
+      letter-spacing: .04em;
+      transition: background .2s, transform .15s, box-shadow .2s;
+    }
+    .nav-cta:hover {
+      background: var(--gold-light);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(201,168,76,.4);
+    }
+
+    .mobile-toggle {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--white);
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    /* ══════════════════════════════════════════
+       HERO
+    ══════════════════════════════════════════ */
+    #hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      background: url('assets/img/paete.jpg') center/cover no-repeat;
+    }
+    .hero-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        135deg,
+        rgba(11,31,58,.92) 0%,
+        rgba(11,31,58,.75) 50%,
+        rgba(11,31,58,.55) 100%
+      );
+    }
+
+    /* Decorative geometric overlay */
+    .hero-geo {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .hero-geo::before {
+      content: '';
+      position: absolute;
+      top: -120px;
+      right: -120px;
+      width: 600px;
+      height: 600px;
+      border: 1px solid rgba(201,168,76,.15);
+      border-radius: 50%;
+    }
+    .hero-geo::after {
+      content: '';
+      position: absolute;
+      bottom: -80px;
+      left: -80px;
+      width: 400px;
+      height: 400px;
+      border: 1px solid rgba(201,168,76,.1);
+      border-radius: 50%;
+    }
+
+    /* Animated grain texture */
+    .hero-grain {
+      position: absolute;
+      inset: 0;
+      opacity: .03;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      background-repeat: repeat;
+      background-size: 128px;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 120px 32px 80px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    .hero-left {}
+
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: rgba(201,168,76,.15);
+      border: 1px solid rgba(201,168,76,.3);
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gold-light);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+    .hero-tag::before {
+      content: '';
+      width: 6px; height: 6px;
+      background: var(--gold);
+      border-radius: 50%;
+      flex-shrink: 0;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: .4; transform: scale(1.4); }
+    }
+
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: clamp(36px, 5vw, 64px);
+      font-weight: 900;
+      color: var(--white);
+      line-height: 1.1;
+      letter-spacing: -.02em;
+      margin-bottom: 20px;
+    }
+    .hero-title em {
+      font-style: italic;
+      color: var(--gold-light);
+    }
+
+    .hero-desc {
+      font-size: 17px;
+      color: rgba(255,255,255,.72);
+      line-height: 1.75;
+      margin-bottom: 40px;
+      max-width: 480px;
+      font-weight: 300;
+    }
+
+    .hero-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+
+    .btn-primary-hero {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 28px;
+      background: var(--gold);
+      color: var(--navy);
+      font-weight: 700;
+      font-size: 14.5px;
+      border-radius: var(--r);
+      text-decoration: none;
+      letter-spacing: .04em;
+      transition: all .2s;
+      box-shadow: 0 4px 20px rgba(201,168,76,.35);
+    }
+    .btn-primary-hero:hover {
+      background: var(--gold-light);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(201,168,76,.5);
+    }
+    .btn-primary-hero i { font-size: 16px; }
+
+    .btn-ghost-hero {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 28px;
+      background: transparent;
+      color: var(--white);
+      font-weight: 500;
+      font-size: 14.5px;
+      border: 1px solid rgba(255,255,255,.3);
+      border-radius: var(--r);
+      text-decoration: none;
+      letter-spacing: .02em;
+      transition: all .2s;
+    }
+    .btn-ghost-hero:hover {
+      background: rgba(255,255,255,.08);
+      border-color: rgba(255,255,255,.5);
+      color: var(--white);
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 32px;
+      margin-top: 52px;
+      padding-top: 36px;
+      border-top: 1px solid rgba(255,255,255,.1);
+    }
+    .hero-stat-num {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--gold-light);
+      line-height: 1;
+    }
+    .hero-stat-lbl {
+      font-size: 11.5px;
+      color: rgba(255,255,255,.5);
+      margin-top: 4px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .hero-right { display: flex; flex-direction: column; gap: 14px; }
+
+    .hero-card {
+      background: rgba(255,255,255,.06);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 12px;
+      padding: 20px 24px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      transition: background .2s, transform .2s;
+    }
+    .hero-card:hover {
+      background: rgba(255,255,255,.1);
+      transform: translateX(-4px);
+    }
+    .hero-card-icon {
+      width: 44px; height: 44px;
+      background: rgba(201,168,76,.2);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .hero-card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 4px;
+      letter-spacing: .01em;
+    }
+    .hero-card-desc {
+      font-size: 12.5px;
+      color: rgba(255,255,255,.55);
+      line-height: 1.55;
+    }
+
+    .hero-scroll {
+      position: absolute;
+      bottom: 36px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+    .hero-scroll span {
+      font-size: 10px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.4);
+    }
+    .scroll-line {
+      width: 1px;
+      height: 40px;
+      background: linear-gradient(to bottom, var(--gold), transparent);
+      animation: scrollDown 1.8s ease-in-out infinite;
+    }
+    @keyframes scrollDown {
+      0%   { transform: scaleY(0); transform-origin: top; opacity: 1; }
+      50%  { transform: scaleY(1); transform-origin: top; opacity: 1; }
+      100% { transform: scaleY(1); transform-origin: bottom; opacity: 0; }
+    }
+
+    /* ══════════════════════════════════════════
+       SECTION COMMONS
+    ══════════════════════════════════════════ */
+    section { padding: 96px 0; }
+    .container-site {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 32px;
+    }
+
+    .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 14px;
+    }
+    .section-label::before {
+      content: '';
+      width: 24px; height: 2px;
+      background: var(--gold);
+      border-radius: 1px;
+    }
+
+    .section-title {
+      font-family: var(--font-display);
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 700;
+      color: var(--navy);
+      line-height: 1.2;
+      letter-spacing: -.02em;
+      margin-bottom: 16px;
+    }
+    .section-title em { font-style: italic; color: var(--gold); }
+
+    .section-desc {
+      font-size: 16px;
+      color: var(--ink-light);
+      line-height: 1.75;
+      max-width: 560px;
+      font-weight: 300;
+    }
+
+    /* ══════════════════════════════════════════
+       ABOUT SECTION
+    ══════════════════════════════════════════ */
+    #about { background: var(--white); }
+
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    .about-visual {
+      position: relative;
+    }
+    .about-img-frame {
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      aspect-ratio: 4/3;
+      box-shadow: var(--shadow-lg);
+    }
+    .about-img-frame img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+    .about-img-frame::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(160deg, transparent 50%, rgba(11,31,58,.6) 100%);
+      z-index: 1;
+    }
+
+    .about-badge {
+      position: absolute;
+      bottom: -20px;
+      right: -20px;
+      width: 120px;
+      height: 120px;
+      background: var(--gold);
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: 6px solid var(--white);
+      box-shadow: var(--shadow-md);
+      z-index: 2;
+    }
+    .about-badge-num {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 900;
+      color: var(--navy);
+      line-height: 1;
+    }
+    .about-badge-lbl {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--navy);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      text-align: center;
+      margin-top: 2px;
+    }
+
+    .about-deco {
+      position: absolute;
+      top: -16px;
+      left: -16px;
+      width: 120px;
+      height: 120px;
+      border: 2px solid var(--gold-pale);
+      border-radius: 12px;
+      z-index: -1;
+    }
+
+    .about-content { display: flex; flex-direction: column; gap: 28px; }
+
+    .about-intro {
+      font-size: 17px;
+      font-weight: 400;
+      color: var(--ink);
+      line-height: 1.8;
+    }
+    .about-intro strong {
+      color: var(--navy);
+      font-weight: 700;
+    }
+
+    .about-pillars {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .pillar {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 18px 20px;
+      background: var(--cream);
+      border-radius: 10px;
+      border-left: 4px solid var(--gold);
+      transition: transform .2s, box-shadow .2s;
+    }
+    .pillar:hover {
+      transform: translateX(4px);
+      box-shadow: var(--shadow-sm);
+    }
+    .pillar-icon {
+      font-size: 22px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .pillar-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 4px;
+    }
+    .pillar-text {
+      font-size: 13px;
+      color: var(--ink-light);
+      line-height: 1.6;
+    }
+
+    .about-law-box {
+      background: var(--navy);
+      border-radius: 12px;
+      padding: 24px 28px;
+      display: flex;
+      gap: 18px;
+      align-items: flex-start;
+    }
+    .law-icon {
+      font-size: 28px;
+      flex-shrink: 0;
+    }
+    .law-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--gold-light);
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .law-text {
+      font-size: 13px;
+      color: rgba(255,255,255,.65);
+      line-height: 1.65;
+    }
+
+    /* ══════════════════════════════════════════
+       SERVICES SECTION
+    ══════════════════════════════════════════ */
+    #services { background: var(--cream); }
+
+    .services-header { text-align: center; margin-bottom: 64px; }
+    .services-header .section-desc { margin: 0 auto; }
+
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .service-card {
+      background: var(--white);
+      border-radius: 14px;
+      padding: 36px 30px;
+      border: 1px solid transparent;
+      position: relative;
+      overflow: hidden;
+      transition: all .25s;
+      cursor: default;
+    }
+    .service-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--gold);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform .3s;
+    }
+    .service-card:hover {
+      border-color: var(--gold-pale);
+      box-shadow: var(--shadow-md);
+      transform: translateY(-6px);
+    }
+    .service-card:hover::before { transform: scaleX(1); }
+
+    .service-num {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--gold);
+      letter-spacing: .1em;
+      margin-bottom: 20px;
+      display: block;
+    }
+
+    .service-icon-wrap {
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, var(--navy), var(--navy-mid));
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      margin-bottom: 20px;
+      box-shadow: 0 6px 20px rgba(11,31,58,.2);
+    }
+
+    .service-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 12px;
+      letter-spacing: -.01em;
+    }
+
+    .service-text {
+      font-size: 14px;
+      color: var(--ink-light);
+      line-height: 1.7;
+      margin-bottom: 20px;
+    }
+
+    .service-features {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .service-feature {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      color: var(--ink-light);
+    }
+    .service-feature::before {
+      content: '';
+      width: 5px; height: 5px;
+      background: var(--gold);
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Featured card */
+    .service-card.featured {
+      background: var(--navy);
+      border-color: var(--navy-light);
+    }
+    .service-card.featured::before { background: var(--gold); }
+    .service-card.featured .service-num { color: var(--gold-light); }
+    .service-card.featured .service-icon-wrap {
+      background: rgba(201,168,76,.2);
+      box-shadow: 0 6px 20px rgba(0,0,0,.2);
+    }
+    .service-card.featured .service-title { color: var(--white); }
+    .service-card.featured .service-text  { color: rgba(255,255,255,.6); }
+    .service-card.featured .service-feature { color: rgba(255,255,255,.55); }
+    .service-card.featured .service-feature::before { background: var(--gold); }
+
+    /* Bottom row: wide cards */
+    .services-grid-bottom {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      margin-top: 24px;
+    }
+
+    /* ══════════════════════════════════════════
+       HOW IT WORKS
+    ══════════════════════════════════════════ */
+    #how { background: var(--navy); }
+
+    .how-header { text-align: center; margin-bottom: 72px; }
+    .how-header .section-title { color: var(--white); }
+    .how-header .section-desc { color: rgba(255,255,255,.55); margin: 0 auto; }
+    .how-header .section-label { color: var(--gold); }
+    .how-header .section-label::before { background: var(--gold); }
+
+    .how-steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      position: relative;
+    }
+    .how-steps::before {
+      content: '';
+      position: absolute;
+      top: 36px;
+      left: 12.5%;
+      right: 12.5%;
+      height: 1px;
+      background: linear-gradient(to right, transparent, rgba(201,168,76,.4), rgba(201,168,76,.4), transparent);
+    }
+
+    .how-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 0 20px;
+      position: relative;
+    }
+
+    .step-circle {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--navy-mid);
+      border: 2px solid rgba(201,168,76,.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 24px;
+      position: relative;
+      z-index: 1;
+      transition: border-color .3s, background .3s;
+    }
+    .how-step:hover .step-circle {
+      background: rgba(201,168,76,.15);
+      border-color: var(--gold);
+    }
+
+    .step-num {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 22px;
+      height: 22px;
+      background: var(--gold);
+      color: var(--navy);
+      font-size: 10px;
+      font-weight: 800;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+    }
+
+    .step-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 10px;
+      letter-spacing: -.01em;
+    }
+    .step-desc {
+      font-size: 13px;
+      color: rgba(255,255,255,.5);
+      line-height: 1.65;
+    }
+
+    /* ══════════════════════════════════════════
+       ROLES SECTION
+    ══════════════════════════════════════════ */
+    #roles { background: var(--white); }
+
+    .roles-header { text-align: center; margin-bottom: 56px; }
+    .roles-header .section-desc { margin: 0 auto; }
+
+    .roles-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .role-card {
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--cream-dark);
+      transition: box-shadow .25s, transform .25s;
+    }
+    .role-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-4px);
+    }
+
+    .role-card-head {
+      padding: 32px 28px 24px;
+      position: relative;
+    }
+    .role-community .role-card-head { background: linear-gradient(135deg, #1e3d6e, #0b1f3a); }
+    .role-barangay .role-card-head  { background: linear-gradient(135deg, #6b2d0e, #3d1a08); }
+    .role-admin .role-card-head     { background: linear-gradient(135deg, #1a3d1a, #0e260e); }
+
+    .role-icon { font-size: 36px; margin-bottom: 12px; display: block; }
+    .role-name {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 6px;
+    }
+    .role-tagline { font-size: 13px; color: rgba(255,255,255,.55); }
+
+    .role-card-body { padding: 28px; background: var(--white); }
+    .role-perks { display: flex; flex-direction: column; gap: 10px; }
+    .role-perk {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 13.5px;
+      color: var(--ink-light);
+    }
+    .perk-check {
+      width: 18px; height: 18px;
+      background: var(--navy);
+      color: var(--white);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .role-community .perk-check { background: var(--navy); }
+    .role-barangay  .perk-check { background: var(--red-accent); }
+    .role-admin     .perk-check { background: #1a3d1a; }
+
+    .role-cta {
+      display: block;
+      text-align: center;
+      margin-top: 20px;
+      padding: 11px;
+      border-radius: var(--r);
+      font-size: 13.5px;
+      font-weight: 600;
+      text-decoration: none;
+      letter-spacing: .03em;
+      transition: all .2s;
+    }
+    .role-community .role-cta { background: var(--navy); color: var(--white); }
+    .role-barangay  .role-cta { background: var(--red-accent); color: var(--white); }
+    .role-admin     .role-cta { background: #1a3d1a; color: var(--white); }
+    .role-cta:hover { opacity: .85; transform: translateY(-1px); }
+
+    /* ══════════════════════════════════════════
+       CTA BANNER
+    ══════════════════════════════════════════ */
+    #cta-banner {
+      background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+      padding: 80px 0;
+      position: relative;
+      overflow: hidden;
+    }
+    #cta-banner::before {
+      content: '';
+      position: absolute;
+      top: -100px; right: -100px;
+      width: 400px; height: 400px;
+      border: 1px solid rgba(201,168,76,.12);
+      border-radius: 50%;
+    }
+    #cta-banner::after {
+      content: '';
+      position: absolute;
+      bottom: -80px; left: -80px;
+      width: 300px; height: 300px;
+      border: 1px solid rgba(201,168,76,.08);
+      border-radius: 50%;
+    }
+
+    .cta-inner {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+    }
+    .cta-inner .section-label {
+      justify-content: center;
+      color: var(--gold-light);
+    }
+    .cta-inner .section-label::before { background: var(--gold-light); }
+    .cta-title {
+      font-family: var(--font-display);
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 16px;
+      letter-spacing: -.02em;
+    }
+    .cta-desc { font-size: 16px; color: rgba(255,255,255,.6); margin-bottom: 36px; }
+    .cta-buttons { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+    /* ══════════════════════════════════════════
+       FOOTER
+    ══════════════════════════════════════════ */
+    #footer {
+      background: var(--ink);
+      padding: 60px 0 32px;
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 1fr;
+      gap: 60px;
+      margin-bottom: 48px;
+    }
+
+    .footer-brand { }
+    .footer-logo-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .footer-logo-badge {
+      width: 36px; height: 36px;
+      background: var(--gold);
+      color: var(--navy);
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 4px;
+    }
+    .footer-logo-name {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--white);
+    }
+    .footer-tagline {
+      font-size: 13px;
+      color: rgba(255,255,255,.45);
+      line-height: 1.7;
+      margin-bottom: 20px;
+    }
+    .footer-location {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      color: rgba(255,255,255,.4);
+    }
+
+    .footer-col-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 18px;
+    }
+    .footer-links { display: flex; flex-direction: column; gap: 10px; }
+    .footer-links a {
+      font-size: 13.5px;
+      color: rgba(255,255,255,.45);
+      text-decoration: none;
+      transition: color .2s;
+    }
+    .footer-links a:hover { color: var(--white); }
+
+    .footer-divider {
+      border: none;
+      border-top: 1px solid rgba(255,255,255,.08);
+      margin-bottom: 24px;
+    }
+
+    .footer-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .footer-copy {
+      font-size: 12.5px;
+      color: rgba(255,255,255,.3);
+    }
+    .footer-copy strong { color: rgba(255,255,255,.55); }
+    .footer-law {
+      font-size: 11px;
+      color: rgba(255,255,255,.2);
+      font-family: var(--font-mono);
+      letter-spacing: .04em;
+    }
+
+    /* ══════════════════════════════════════════
+       SCROLL TOP
+    ══════════════════════════════════════════ */
+    #scroll-top {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      width: 44px; height: 44px;
+      background: var(--gold);
+      color: var(--navy);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      text-decoration: none;
+      box-shadow: var(--shadow-md);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(12px);
+      transition: opacity .25s, transform .25s;
+      z-index: 999;
+    }
+    #scroll-top.visible { opacity: 1; pointer-events: all; transform: translateY(0); }
+    #scroll-top:hover { background: var(--gold-light); }
+
+    /* ══════════════════════════════════════════
+       PRELOADER
+    ══════════════════════════════════════════ */
+    #preloader {
+      position: fixed;
+      inset: 0;
+      background: var(--navy);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+      transition: opacity .5s, visibility .5s;
+    }
+    #preloader.done { opacity: 0; visibility: hidden; }
+    .preloader-logo {
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 900;
+      color: var(--gold);
+      letter-spacing: .02em;
+    }
+    .preloader-bar {
+      width: 120px; height: 2px;
+      background: rgba(255,255,255,.1);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+    .preloader-bar-fill {
+      height: 100%;
+      background: var(--gold);
+      border-radius: 1px;
+      animation: load .8s ease-out forwards;
+    }
+    @keyframes load { from { width: 0; } to { width: 100%; } }
+
+    /* ══════════════════════════════════════════
+       MOBILE NAV
+    ══════════════════════════════════════════ */
+    .mobile-nav {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--navy);
+      z-index: 998;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      transform: translateX(100%);
+      transition: transform .3s;
+    }
+    .mobile-nav.open { transform: translateX(0); }
+    .mobile-nav a {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--white);
+      text-decoration: none;
+      transition: color .2s;
+    }
+    .mobile-nav a:hover { color: var(--gold-light); }
+    .mobile-nav-close {
+      position: absolute;
+      top: 24px; right: 28px;
+      background: none;
+      border: none;
+      color: var(--white);
+      font-size: 28px;
+      cursor: pointer;
+    }
+
+    /* ══════════════════════════════════════════
+       AOS OVERRIDES
+    ══════════════════════════════════════════ */
+    [data-aos] { transition-duration: 700ms !important; }
+
+    /* ══════════════════════════════════════════
+       RESPONSIVE
+    ══════════════════════════════════════════ */
+    @media (max-width: 1024px) {
+      .hero-content    { grid-template-columns: 1fr; gap: 40px; }
+      .hero-right      { display: grid; grid-template-columns: 1fr 1fr; }
+      .about-grid      { grid-template-columns: 1fr; gap: 40px; }
+      .services-grid   { grid-template-columns: 1fr 1fr; }
+      .how-steps       { grid-template-columns: 1fr 1fr; gap: 32px; }
+      .how-steps::before { display: none; }
+      .roles-grid      { grid-template-columns: 1fr; max-width: 480px; margin: 0 auto; }
+      .footer-grid     { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 768px) {
+      .nav-links, .nav-cta { display: none; }
+      .mobile-toggle        { display: block; }
+      .mobile-nav           { display: flex; }
+      .hero-content         { padding: 100px 20px 60px; }
+      .hero-right           { grid-template-columns: 1fr; }
+      .hero-stats           { flex-direction: column; gap: 20px; }
+      .services-grid        { grid-template-columns: 1fr; }
+      .services-grid-bottom { grid-template-columns: 1fr; }
+      .how-steps            { grid-template-columns: 1fr; }
+      .footer-grid          { grid-template-columns: 1fr; gap: 32px; }
+      .footer-bottom        { flex-direction: column; text-align: center; }
+      .container-site       { padding: 0 20px; }
+      section               { padding: 60px 0; }
+    }
+  </style>
 
 </head>
 
-<body class="index-page">
+<body>
 
-  <header id="header" class="header d-flex align-items-center fixed-top">
-    <div class="container-fluid container-xl position-relative d-flex align-items-center">
+  <!-- Preloader -->
+  <div id="preloader">
+    <div class="preloader-logo">VOICE</div>
+    <div class="preloader-bar"><div class="preloader-bar-fill"></div></div>
+  </div>
 
-      <a href="index.html" class="logo d-flex align-items-center me-auto">
-        <!-- Uncomment the line below if you also wish to use an image logo -->
-        <!-- <img src="assets/img/logo.png" alt=""> -->
-        <h1 class="sitename">VOICE (Barangay Complain Management System)</h1>
+  <!-- Mobile Nav -->
+  <div class="mobile-nav" id="mobile-nav">
+    <button class="mobile-nav-close" onclick="closeMobileNav()">×</button>
+    <a href="#hero"     onclick="closeMobileNav()">Home</a>
+    <a href="#about"    onclick="closeMobileNav()">About</a>
+    <a href="#services" onclick="closeMobileNav()">Services</a>
+    <a href="#how"      onclick="closeMobileNav()">How It Works</a>
+    <a href="#roles"    onclick="closeMobileNav()">Who It's For</a>
+    <a href="connection/login.php" class="nav-cta" style="font-size:16px;padding:14px 32px;margin-top:8px">Get Started</a>
+  </div>
+
+  <!-- Header -->
+  <header id="header">
+    <div class="header-inner">
+      <a href="#hero" class="logo-wrap">
+        <div class="logo-badge">V</div>
+        <div class="logo-text">
+          <span class="logo-name">VOICE</span>
+          <span class="logo-sub">Paete, Laguna</span>
+        </div>
       </a>
 
-      <nav id="navmenu" class="navmenu">
-        <ul>
-          <li><a href="#hero" class="active">Home</a></li>
-          <li><a href="#hero" class="">About</a></li>
-          <li><a href="#hero" class="">Services</a></li>
-          <!-- Other nav links removed to match only hero section -->
+      <nav>
+        <ul class="nav-links">
+          <li><a href="#hero"     class="active">Home</a></li>
+          <li><a href="#about">About</a></li>
+          <li><a href="#services">Services</a></li>
+          <li><a href="#how">How It Works</a></li>
+          <li><a href="#roles">Who It's For</a></li>
         </ul>
-        <i class="mobile-nav-toggle d-xl-none bi bi-list"></i>
       </nav>
 
-      <a class="cta-btn" href="connection/login.php">Get Started</a>
-
+      <a href="connection/login.php" class="nav-cta">
+        <i class="bi bi-box-arrow-in-right"></i> Get Started
+      </a>
+      <button class="mobile-toggle" onclick="openMobileNav()">
+        <i class="bi bi-list"></i>
+      </button>
     </div>
   </header>
 
-  <main class="main">
+  <main>
 
-    <!-- Hero Section -->
-    <section id="hero" class="hero section dark-background">
+    <!-- ══ HERO ══ -->
+    <section id="hero">
+      <div class="hero-bg"></div>
+      <div class="hero-geo"></div>
+      <div class="hero-grain"></div>
 
-      <img src="assets/img/paete.jpg" alt="" data-aos="fade-in">
+      <div class="hero-content">
+        <div class="hero-left" data-aos="fade-right">
+          <div class="hero-tag">
+            Paete, Laguna · Barangay Blotter System
+          </div>
+          <h1 class="hero-title">
+            Empowering<br>
+            <em>Voices.</em><br>
+            Building Harmony.
+          </h1>
+          <p class="hero-desc">
+            A community-driven digital platform for filing, tracking, and resolving barangay complaints in Paete. Transparent, accountable, and rooted in the Katarungang Pambarangay Law.
+          </p>
+          <div class="hero-actions">
+            <a href="connection/login.php" class="btn-primary-hero">
+              <i class="bi bi-shield-check"></i> File a Complaint
+            </a>
+            <a href="#about" class="btn-ghost-hero">
+              <i class="bi bi-info-circle"></i> Learn More
+            </a>
+          </div>
+          <div class="hero-stats">
+            <div>
+              <div class="hero-stat-num">9</div>
+              <div class="hero-stat-lbl">Barangays Covered</div>
+            </div>
+            <div>
+              <div class="hero-stat-num">KP Law</div>
+              <div class="hero-stat-lbl">Legally Compliant</div>
+            </div>
+            <div>
+              <div class="hero-stat-num">3</div>
+              <div class="hero-stat-lbl">Portal Roles</div>
+            </div>
+          </div>
+        </div>
 
-      <div class="container d-flex flex-column align-items-center">
-        <h2 data-aos="fade-up" data-aos-delay="100">EMPOWERING VOICES. BUILDING HARMONY.</h2>
-        <p data-aos="fade-up" data-aos-delay="200">A community-driven platform for resolving concerns and strengthening unity in Paete.</p>
-        <div class="d-flex mt-4" data-aos="fade-up" data-aos-delay="300">
-          <a href="connection/login.php" class="btn-get-started">Get Started</a>
+        <div class="hero-right" data-aos="fade-left" data-aos-delay="150">
+          <div class="hero-card">
+            <div class="hero-card-icon">📝</div>
+            <div>
+              <div class="hero-card-title">File a Blotter Online</div>
+              <div class="hero-card-desc">Submit complaints anytime from any device — no need to visit the barangay hall</div>
+            </div>
+          </div>
+          <div class="hero-card">
+            <div class="hero-card-icon">📅</div>
+            <div>
+              <div class="hero-card-title">Mediation Scheduling</div>
+              <div class="hero-card-desc">Automated hearing schedules with notifications for both parties</div>
+            </div>
+          </div>
+          <div class="hero-card">
+            <div class="hero-card-icon">📊</div>
+            <div>
+              <div class="hero-card-title">Live Case Tracking</div>
+              <div class="hero-card-desc">Monitor your case status in real-time from filing through resolution</div>
+            </div>
+          </div>
+          <div class="hero-card">
+            <div class="hero-card-icon">🔒</div>
+            <div>
+              <div class="hero-card-title">Secure & Confidential</div>
+              <div class="hero-card-desc">Role-based access ensures your case details remain protected</div>
+            </div>
+          </div>
         </div>
       </div>
 
-    </section><!-- /Hero Section -->
+      <a href="#about" class="hero-scroll">
+        <span>Scroll</span>
+        <div class="scroll-line"></div>
+      </a>
+    </section>
+
+    <!-- ══ ABOUT ══ -->
+    <section id="about">
+      <div class="container-site">
+        <div class="about-grid">
+          <div class="about-visual" data-aos="fade-right">
+            <div class="about-deco"></div>
+            <div class="about-img-frame">
+              <img src="assets/img/paete.jpg" alt="Paete, Laguna">
+            </div>
+            <div class="about-badge">
+              <div class="about-badge-num">RA</div>
+              <div class="about-badge-lbl">7160<br>Compliant</div>
+            </div>
+          </div>
+
+          <div class="about-content" data-aos="fade-left" data-aos-delay="100">
+            <div>
+              <div class="section-label">About VOICE</div>
+              <h2 class="section-title">A <em>Smarter</em> Way to Resolve Community Disputes</h2>
+            </div>
+
+            <p class="about-intro">
+              <strong>VOICE</strong> is Paete's digital barangay complaint management system — designed to make the formal complaint process faster, fairer, and more accessible for every resident. By digitizing the blotter system, we help barangay officials focus on resolution, not paperwork.
+            </p>
+
+            <div class="about-pillars">
+              <div class="pillar">
+                <div class="pillar-icon">⚖️</div>
+                <div>
+                  <div class="pillar-title">Rooted in the KP Law</div>
+                  <div class="pillar-text">Fully aligned with the Katarungang Pambarangay Law under Republic Act 7160. Every workflow — from mediation to CFA issuance — follows proper legal procedure.</div>
+                </div>
+              </div>
+              <div class="pillar">
+                <div class="pillar-icon">🤝</div>
+                <div>
+                  <div class="pillar-title">Community-First Design</div>
+                  <div class="pillar-text">Built for Paete residents of all digital literacy levels. Simple forms, clear status updates, and plain language notifications throughout.</div>
+                </div>
+              </div>
+              <div class="pillar">
+                <div class="pillar-icon">📋</div>
+                <div>
+                  <div class="pillar-title">Full Transparency & Accountability</div>
+                  <div class="pillar-text">Every action on a case is logged. Officers, complainants, and respondents each see what they need — no more lost paper blotters or delayed notices.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="about-law-box">
+              <div class="law-icon">📜</div>
+              <div>
+                <div class="law-title">Katarungang Pambarangay (KP Law)</div>
+                <div class="law-text">Under Sections 399–422 of the Local Government Code, all disputes between residents must first go through barangay-level mediation before being brought to court. VOICE digitizes and manages this entire mandatory process.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ SERVICES ══ -->
+    <section id="services">
+      <div class="container-site">
+        <div class="services-header" data-aos="fade-up">
+          <div class="section-label">What We Offer</div>
+          <h2 class="section-title">Everything Your Barangay Needs,<br><em>All in One Place</em></h2>
+          <p class="section-desc">From the moment a complaint is filed to the final resolution, VOICE handles every step with clarity and compliance.</p>
+        </div>
+
+        <div class="services-grid">
+          <div class="service-card" data-aos="fade-up" data-aos-delay="0">
+            <span class="service-num">01</span>
+            <div class="service-icon-wrap">📝</div>
+            <div class="service-title">Online Blotter Filing</div>
+            <p class="service-text">Residents can file complaints directly from their phones or computers — no need to visit the barangay hall. Attach photos and describe incidents in detail.</p>
+            <div class="service-features">
+              <div class="service-feature">24/7 accessibility from any device</div>
+              <div class="service-feature">Photo and document attachments</div>
+              <div class="service-feature">Auto-assigned case numbers</div>
+              <div class="service-feature">Incident type and severity auto-classification</div>
+            </div>
+          </div>
+
+          <div class="service-card featured" data-aos="fade-up" data-aos-delay="80">
+            <span class="service-num">02</span>
+            <div class="service-icon-wrap">🧑‍⚖️</div>
+            <div class="service-title">KP Mediation Management</div>
+            <p class="service-text">Full compliance with the Katarungang Pambarangay process — from hearing scheduling to outcome documentation, CFA issuance, and dismissal handling.</p>
+            <div class="service-features">
+              <div class="service-feature">Automated hearing schedules & reminders</div>
+              <div class="service-feature">No-show tracking with legal consequences</div>
+              <div class="service-feature">CFA issuance after 2nd respondent miss</div>
+              <div class="service-feature">Case dismissal on complainant 2nd miss</div>
+            </div>
+          </div>
+
+          <div class="service-card" data-aos="fade-up" data-aos-delay="160">
+            <span class="service-num">03</span>
+            <div class="service-icon-wrap">🔔</div>
+            <div class="service-title">Smart Notifications</div>
+            <p class="service-text">Both parties receive timely notifications for every case event — hearings scheduled, rescheduled, warnings issued, and outcomes recorded.</p>
+            <div class="service-features">
+              <div class="service-feature">In-app notification center</div>
+              <div class="service-feature">SMS-ready notification queue</div>
+              <div class="service-feature">Role-specific message content</div>
+              <div class="service-feature">Read/unread tracking per notice</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="services-grid-bottom">
+          <div class="service-card" data-aos="fade-up" data-aos-delay="0">
+            <span class="service-num">04</span>
+            <div class="service-icon-wrap">📊</div>
+            <div class="service-title">Data Analytics & Reports</div>
+            <p class="service-text">Barangay officers and superadmins get meaningful analytics — incident trends, resolution rates, repeat violators, and forecast insights — all visualized clearly.</p>
+            <div class="service-features">
+              <div class="service-feature">Incident type & severity breakdown charts</div>
+              <div class="service-feature">Monthly blotter trend forecasting</div>
+              <div class="service-feature">Repeat violator risk scoring</div>
+              <div class="service-feature">Export to CSV for records management</div>
+            </div>
+          </div>
+
+          <div class="service-card" data-aos="fade-up" data-aos-delay="80">
+            <span class="service-num">05</span>
+            <div class="service-icon-wrap">🗂️</div>
+            <div class="service-title">Records & Case Management</div>
+            <p class="service-text">A complete digital archive of all blotters, mediation sessions, penalties, and resolutions. Secure, searchable, and organized by status, type, and barangay.</p>
+            <div class="service-features">
+              <div class="service-feature">Full case history and activity log</div>
+              <div class="service-feature">Attachment storage for evidence</div>
+              <div class="service-feature">Refer to police, VAWC, or municipality</div>
+              <div class="service-feature">Multi-barangay superadmin oversight</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ HOW IT WORKS ══ -->
+    <section id="how">
+      <div class="container-site">
+        <div class="how-header" data-aos="fade-up">
+          <div class="section-label">The Process</div>
+          <h2 class="section-title">How VOICE Works</h2>
+          <p class="section-desc">From filing to resolution — a clear, legally compliant process every step of the way.</p>
+        </div>
+
+        <div class="how-steps">
+          <div class="how-step" data-aos="fade-up" data-aos-delay="0">
+            <div class="step-circle">
+              📝
+              <div class="step-num">1</div>
+            </div>
+            <div class="step-title">File a Complaint</div>
+            <p class="step-desc">A resident logs in and submits a blotter report with the incident type, narrative, location, and optional photo evidence.</p>
+          </div>
+          <div class="how-step" data-aos="fade-up" data-aos-delay="80">
+            <div class="step-circle">
+              🔍
+              <div class="step-num">2</div>
+            </div>
+            <div class="step-title">Barangay Review</div>
+            <p class="step-desc">A barangay officer reviews the report, approves or routes it, and assigns the appropriate prescribed action.</p>
+          </div>
+          <div class="how-step" data-aos="fade-up" data-aos-delay="160">
+            <div class="step-circle">
+              🧑‍⚖️
+              <div class="step-num">3</div>
+            </div>
+            <div class="step-title">Mediation Hearing</div>
+            <p class="step-desc">Both parties are notified of the hearing schedule. Attendance is tracked. Outcomes are recorded following KP Law guidelines.</p>
+          </div>
+          <div class="how-step" data-aos="fade-up" data-aos-delay="240">
+            <div class="step-circle">
+              ✅
+              <div class="step-num">4</div>
+            </div>
+            <div class="step-title">Resolution or Referral</div>
+            <p class="step-desc">Case is resolved, dismissed, or referred to the appropriate authority (PNP, VAWC, or Municipality) with a proper CFA if needed.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ ROLES ══ -->
+    <section id="roles">
+      <div class="container-site">
+        <div class="roles-header" data-aos="fade-up">
+          <div class="section-label">Who It's For</div>
+          <h2 class="section-title">Three Portals. <em>One System.</em></h2>
+          <p class="section-desc">VOICE serves residents, barangay officers, and municipal administrators — each with a tailored experience.</p>
+        </div>
+
+        <div class="roles-grid">
+          <div class="role-card role-community" data-aos="fade-up" data-aos-delay="0">
+            <div class="role-card-head">
+              <span class="role-icon">👤</span>
+              <div class="role-name">Community Portal</div>
+              <div class="role-tagline">For Paete Residents</div>
+            </div>
+            <div class="role-card-body">
+              <div class="role-perks">
+                <div class="role-perk"><div class="perk-check">✓</div>File blotter reports online anytime</div>
+                <div class="role-perk"><div class="perk-check">✓</div>Track your case status in real-time</div>
+                <div class="role-perk"><div class="perk-check">✓</div>View scheduled mediation hearings</div>
+                <div class="role-perk"><div class="perk-check">✓</div>Receive official notices & notifications</div>
+                <div class="role-perk"><div class="perk-check">✓</div>View cases filed against you</div>
+              </div>
+              <a href="connection/login.php" class="role-cta">Access Community Portal →</a>
+            </div>
+          </div>
+
+          <div class="role-card role-barangay" data-aos="fade-up" data-aos-delay="80">
+            <div class="role-card-head">
+              <span class="role-icon">🏛️</span>
+              <div class="role-name">Barangay Portal</div>
+              <div class="role-tagline">For Barangay Officers</div>
+            </div>
+            <div class="role-card-body">
+              <div class="role-perks">
+                <div class="role-perk"><div class="perk-check">✓</div>Review and approve incoming blotters</div>
+                <div class="role-perk"><div class="perk-check">✓</div>Manage KP mediation hearings</div>
+                <div class="role-perk"><div class="perk-check">✓</div>Issue CFA and dismissal notices</div>
+                <div class="role-perk"><div class="perk-check">✓</div>Send notifications to both parties</div>
+                <div class="role-perk"><div class="perk-check">✓</div>Analytics dashboard & case archive</div>
+              </div>
+              <a href="connection/login.php" class="role-cta">Access Barangay Portal →</a>
+            </div>
+          </div>
+
+          <div class="role-card role-admin" data-aos="fade-up" data-aos-delay="160">
+            <div class="role-card-head">
+              <span class="role-icon">🗺️</span>
+              <div class="role-name">Superadmin Portal</div>
+              <div class="role-tagline">For Municipal Administrators</div>
+            </div>
+            <div class="role-card-body">
+              <div class="role-perks">
+                <div class="role-perk"><div class="perk-check">✓</div>Oversee all 9 barangays in Paete</div>
+                <div class="role-perk"><div class="perk-check">✓</div>Manage barangay accounts & officers</div>
+                <div class="role-perk"><div class="perk-check">✓</div>View escalated cases & referrals</div>
+                <div class="role-perk"><div class="perk-check">✓</div>Municipal-level analytics overview</div>
+                <div class="role-perk"><div class="perk-check">✓</div>User approval and account management</div>
+              </div>
+              <a href="connection/login.php" class="role-cta">Access Admin Portal →</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ CTA BANNER ══ -->
+    <section id="cta-banner">
+      <div class="container-site">
+        <div class="cta-inner" data-aos="fade-up">
+          <div class="section-label">Ready to Start?</div>
+          <h2 class="cta-title">Your Voice Matters in Paete</h2>
+          <p class="cta-desc">Register now to file complaints, track resolutions, and participate in building a more harmonious community.</p>
+          <div class="cta-buttons">
+            <a href="connection/login.php" class="btn-primary-hero">
+              <i class="bi bi-person-plus"></i> Create an Account
+            </a>
+            <a href="connection/login.php" class="btn-ghost-hero">
+              <i class="bi bi-box-arrow-in-right"></i> Sign In
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
 
   </main>
 
-  <footer id="footer" class="footer dark-background">
+  <!-- Footer -->
+  <footer id="footer">
+    <div class="container-site">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-logo-wrap">
+            <div class="footer-logo-badge">V</div>
+            <div class="footer-logo-name">VOICE</div>
+          </div>
+          <p class="footer-tagline">A community-driven platform for barangay complaint management and dispute resolution in Paete, Laguna, Philippines.</p>
+          <div class="footer-location">
+            <i class="bi bi-geo-alt"></i>
+            Paete, Laguna, Philippines · 4016
+          </div>
+        </div>
 
-    <div class="container copyright text-center mt-4">
-      <p>© <span>Copyright</span> <strong class="px-1 sitename"> Paete, Laguna, Philippines</strong> <span>All Rights Reserved</span></p>
+        <div>
+          <div class="footer-col-title">Quick Links</div>
+          <div class="footer-links">
+            <a href="#about">About VOICE</a>
+            <a href="#services">Services</a>
+            <a href="#how">How It Works</a>
+            <a href="#roles">Who It's For</a>
+            <a href="connection/login.php">Login / Register</a>
+          </div>
+        </div>
+
+        <div>
+          <div class="footer-col-title">Legal Basis</div>
+          <div class="footer-links">
+            <a href="#">RA 7160 — Local Government Code</a>
+            <a href="#">Katarungang Pambarangay Law</a>
+            <a href="#">Sections 399–422 (KP Process)</a>
+            <a href="#">RA 9262 — VAWC Act</a>
+            <a href="#">Data Privacy Act (RA 10173)</a>
+          </div>
+        </div>
+      </div>
+
+      <hr class="footer-divider">
+
+      <div class="footer-bottom">
+        <p class="footer-copy">
+          © 2025 <strong>VOICE — Barangay Complaint Management System</strong> · Paete, Laguna. All Rights Reserved.
+        </p>
+        <div class="footer-law">RA 7160 · KP LAW COMPLIANT</div>
+      </div>
     </div>
   </footer>
 
   <!-- Scroll Top -->
-  <a href="#" id="scroll-top" class="scroll-top d-flex align-items-center justify-content-center"><i class="bi bi-arrow-up-short"></i></a>
+  <a href="#" id="scroll-top"><i class="bi bi-arrow-up-short"></i></a>
 
-  <!-- Preloader -->
-  <div id="preloader"></div>
-
-  <!-- Vendor JS Files -->
+  <!-- Vendor JS -->
   <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-  <script src="assets/vendor/php-email-form/validate.js"></script>
   <script src="assets/vendor/aos/aos.js"></script>
-  <script src="assets/vendor/glightbox/js/glightbox.min.js"></script>
-  <script src="assets/vendor/purecounter/purecounter_vanilla.js"></script>
-  <script src="assets/vendor/swiper/swiper-bundle.min.js"></script>
-  <script src="assets/vendor/imagesloaded/imagesloaded.pkgd.min.js"></script>
-  <script src="assets/vendor/isotope-layout/isotope.pkgd.min.js"></script>
 
-  <!-- Main JS File -->
-  <script src="assets/js/main.js"></script>
+  <script>
+    // Preloader
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        document.getElementById('preloader').classList.add('done');
+      }, 900);
+    });
+
+    // Header scroll
+    var header = document.getElementById('header');
+    window.addEventListener('scroll', function() {
+      header.classList.toggle('scrolled', window.scrollY > 50);
+      document.getElementById('scroll-top').classList.toggle('visible', window.scrollY > 300);
+    });
+
+    // Active nav link on scroll
+    var sections = document.querySelectorAll('section[id]');
+    var navLinks  = document.querySelectorAll('.nav-links a');
+    window.addEventListener('scroll', function() {
+      var scrollY = window.scrollY + 100;
+      sections.forEach(function(s) {
+        if (scrollY >= s.offsetTop && scrollY < s.offsetTop + s.offsetHeight) {
+          navLinks.forEach(function(a) {
+            a.classList.remove('active');
+            if (a.getAttribute('href') === '#' + s.id) a.classList.add('active');
+          });
+        }
+      });
+    });
+
+    // Mobile nav
+    function openMobileNav() {
+      document.getElementById('mobile-nav').classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeMobileNav() {
+      document.getElementById('mobile-nav').classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    // Scroll top
+    document.getElementById('scroll-top').addEventListener('click', function(e) {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // AOS
+    AOS.init({ duration: 700, once: true, offset: 60 });
+  </script>
 
 </body>
-
 </html>

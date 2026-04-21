@@ -18,7 +18,7 @@ define('DB_HOST',    'localhost');
 define('DB_PORT',    '3306');
 define('DB_NAME',    'u727297653_voicesiniloan');      // your database name
 define('DB_USER',    'u727297653_voicesiniloan');           // your MySQL username
-define('DB_PASS',    'Voice1234Siniloan@');    
+define('DB_PASS',    'Voice1234Siniloan@'); 
 define('DB_CHARSET', 'utf8mb4');
 
 // ── PDO CONNECTION ────────────────────────────────────────────

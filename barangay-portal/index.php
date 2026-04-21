@@ -481,10 +481,10 @@ function renderPanel(b) {
   document.getElementById('panel-case-no').textContent = b.case_number;
   document.getElementById('panel-case-sub').textContent = b.incident_type + ' - ' + b.incident_date;
 
-  const prescribedOpts = ['pending','document_only','mediation','refer_barangay','refer_police','refer_vawc','escalate_municipality']
+  const prescribedOpts = ['pending','document_only','mediation','barangay_deliberation','refer_barangay','refer_police','refer_vawc','escalate_municipality']
     .map(function(v) { return '<option value="' + v + '"' + (b.prescribed_action===v?' selected':'') + '>' + ucw(v.replace(/_/g,' ')) + '</option>'; }).join('');
 
-  const statusOpts = ['pending_review','active','mediation_set','escalated','resolved','closed','transferred']
+  const statusOpts = ['pending_review','active','mediation_set','deliberation','escalated','resolved','closed','transferred']
     .map(function(v) { return '<option value="' + v + '"' + (b.status===v?' selected':'') + '>' + ucw(v.replace(/_/g,' ')) + '</option>'; }).join('');
 
   const timeline = (b.timeline||[]).map(function(t) {

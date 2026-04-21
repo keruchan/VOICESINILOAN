@@ -340,10 +340,6 @@ CREATE TABLE `penalties` (
 -- Dumping data for table `penalties`
 --
 
-INSERT INTO `penalties` (`id`, `blotter_id`, `violation_id`, `mediation_schedule_id`, `missed_party`, `barangay_id`, `reason`, `amount`, `community_hours`, `due_date`, `paid_at`, `status`, `issued_by`, `created_at`) VALUES
-(1, 1, NULL, 2, 'respondent', 1, 'Failure to appear at mediation (1st offense)', 500.00, 4, '2026-04-21', NULL, 'pending', 3, '2026-04-06 12:19:45'),
-(2, 1, NULL, 3, 'respondent', 1, 'Failure to appear at mediation (2nd offense)', 1000.00, 8, '2026-04-21', NULL, 'pending', 3, '2026-04-06 12:22:06'),
-(3, 1, NULL, 5, 'respondent', 1, 'Failure to appear at mediation (3rd offense)', 2000.00, 16, '2026-04-21', NULL, 'pending', 3, '2026-04-06 14:44:34');
 
 -- --------------------------------------------------------
 
