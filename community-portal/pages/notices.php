@@ -478,21 +478,67 @@ $unread_count = count(array_filter($notifications, fn($n) => $n['status'] !== 'r
 
   <?php else: ?>
 
+    <!-- Filter bar -->
+    <div class="notices-filter-bar">
+      <div class="inp-icon" style="flex:1;min-width:180px;max-width:300px">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4"/><path d="M10 10l2.5 2.5"/></svg>
+        <input type="search" id="sanction-search" placeholder="Search case no., type, party..." oninput="filterSanctions(true)">
+      </div>
+      <select id="sanction-filter-role" onchange="filterSanctions(true)" style="width:auto;min-width:160px">
+        <option value="">All Roles</option>
+        <option value="complainant">As Complainant</option>
+        <option value="respondent">As Respondent</option>
+      </select>
+      <select id="sanction-filter-type" onchange="filterSanctions(true)" style="width:auto;min-width:170px">
+        <option value="">All Types</option>
+        <option value="penalty">Formal Penalties</option>
+        <option value="missed_hearing">Missed Hearings</option>
+        <option value="case_referred">Referred / Escalated</option>
+        <option value="case_dismissed">Dismissed Cases</option>
+      </select>
+      <select id="sanction-filter-status" onchange="filterSanctions(true)" style="width:auto;min-width:140px">
+        <option value="">All Statuses</option>
+        <option value="pending">Pending</option>
+        <option value="paid">Paid</option>
+        <option value="waived">Waived</option>
+        <option value="overdue">Overdue</option>
+        <option value="no_show">No-Show</option>
+        <option value="referred">Referred</option>
+        <option value="dismissed">Dismissed</option>
+      </select>
+      <button class="btn btn-outline btn-sm" onclick="clearSanctionFilters()">Clear</button>
+      <span id="sanction-count" class="nf-count"></span>
+    </div>
+
+    <!-- No filter results -->
+    <div id="sanction-no-results" style="display:none">
+      <div class="ntab-empty">
+        <div class="es-icon">🔍</div>
+        <div class="es-title">No sanctions match</div>
+        <div class="es-sub">Try adjusting the search or filter options.</div>
+      </div>
+    </div>
+
     <!-- ─────────────────────────────────────────────
          SECTION A: Formal Penalties (from penalties table)
     ──────────────────────────────────────────────── -->
 
     <?php if (!empty($penalties_as_respondent)): ?>
-    <div class="notices-subhdr" style="color:var(--rose-600)">
+    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="penalty-respondent" style="color:var(--rose-600)">
       <span>🚨 Formal Penalties Against You</span>
     </div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
+    <div class="sanction-group" data-sanction-group="penalty-respondent" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
       <?php foreach ($penalties_as_respondent as $p):
         $is_overdue = ($p['penalty_status'] === 'pending' && !empty($p['due_date']) && $p['due_date'] < date('Y-m-d'));
         $pchip  = $is_overdue ? 'ch-rose' : ($penalty_chip[$p['penalty_status']] ?? 'ch-slate');
         $plabel = $is_overdue ? 'Overdue' : ucfirst($p['penalty_status']);
+        $psearch = strtolower(trim(($p['case_number'] ?? '') . ' ' . ($p['incident_type'] ?? '') . ' ' . ($p['reason'] ?? '') . ' ' . ($p['complainant_name'] ?? '')));
       ?>
-      <div class="card penalty-card-respondent">
+      <div class="card penalty-card-respondent sanction-card"
+           data-sanction-role="respondent"
+           data-sanction-type="penalty"
+           data-sanction-status="<?= e($is_overdue ? 'overdue' : ($p['penalty_status'] ?? '')) ?>"
+           data-sanction-search="<?= e($psearch) ?>">
         <div class="card-body" style="padding:16px 18px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
             <div style="display:flex;align-items:flex-start;gap:12px">
@@ -535,16 +581,21 @@ $unread_count = count(array_filter($notifications, fn($n) => $n['status'] !== 'r
     <?php endif; ?>
 
     <?php if (!empty($penalties_as_complainant)): ?>
-    <div class="notices-subhdr" style="color:var(--amber-600)">
+    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="penalty-complainant" style="color:var(--amber-600)">
       <span>📋 Formal Penalties Issued to You as Complainant</span>
     </div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
+    <div class="sanction-group" data-sanction-group="penalty-complainant" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
       <?php foreach ($penalties_as_complainant as $p):
         $is_overdue = ($p['penalty_status'] === 'pending' && !empty($p['due_date']) && $p['due_date'] < date('Y-m-d'));
         $pchip  = $is_overdue ? 'ch-rose' : ($penalty_chip[$p['penalty_status']] ?? 'ch-slate');
         $plabel = $is_overdue ? 'Overdue' : ucfirst($p['penalty_status']);
+        $psearch = strtolower(trim(($p['case_number'] ?? '') . ' ' . ($p['incident_type'] ?? '') . ' ' . ($p['reason'] ?? '') . ' ' . ($p['respondent_name'] ?? '')));
       ?>
-      <div class="card penalty-card-complainant">
+      <div class="card penalty-card-complainant sanction-card"
+           data-sanction-role="complainant"
+           data-sanction-type="penalty"
+           data-sanction-status="<?= e($is_overdue ? 'overdue' : ($p['penalty_status'] ?? '')) ?>"
+           data-sanction-search="<?= e($psearch) ?>">
         <div class="card-body" style="padding:16px 18px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
             <div style="display:flex;align-items:flex-start;gap:12px">
@@ -609,18 +660,23 @@ $unread_count = count(array_filter($notifications, fn($n) => $n['status'] !== 'r
     ?>
 
     <?php if (!empty($ev_missed_resp)): ?>
-    <div class="notices-subhdr" style="color:var(--rose-600)">
+    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="missed-respondent" style="color:var(--rose-600)">
       <span>❌ Missed Hearings — You Were Required to Attend</span>
     </div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
+    <div class="sanction-group" data-sanction-group="missed-respondent" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
       <?php foreach ($ev_missed_resp as $e):
         $miss_count  = (int)($e['respondent_missed'] ?? 0);
         // Clamp to max rule index
         $rule_key    = min($miss_count, 2);
         $rule        = $rule_key > 0 ? ($resp_consequences[$rule_key] ?? null) : null;
         $action_chip = $e['action_type'] === 'cfa_issued' ? '<span class="chip ch-violet" style="font-size:10px">CFA Issued</span>' : '';
+        $esearch = strtolower(trim(($e['case_number'] ?? '') . ' ' . ($e['incident_type'] ?? '') . ' missed hearing no-show ' . ($e['complainant_name'] ?? '')));
       ?>
-      <div class="card event-card-missed-resp">
+      <div class="card event-card-missed-resp sanction-card"
+           data-sanction-role="respondent"
+           data-sanction-type="missed_hearing"
+           data-sanction-status="no_show"
+           data-sanction-search="<?= e($esearch) ?>">
         <div class="card-body" style="padding:14px 18px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
             <div style="display:flex;align-items:flex-start;gap:12px">
@@ -666,16 +722,21 @@ $unread_count = count(array_filter($notifications, fn($n) => $n['status'] !== 'r
     <?php endif; ?>
 
     <?php if (!empty($ev_missed_comp)): ?>
-    <div class="notices-subhdr" style="color:var(--amber-600)">
+    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="missed-complainant" style="color:var(--amber-600)">
       <span>⚠️ Missed Hearings — Cases You Filed</span>
     </div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
+    <div class="sanction-group" data-sanction-group="missed-complainant" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
       <?php foreach ($ev_missed_comp as $e):
         $miss_count = (int)($e['complainant_missed'] ?? 0);
         $rule_key   = min($miss_count, 2);
         $rule       = $rule_key > 0 ? ($comp_consequences[$rule_key] ?? null) : null;
+        $esearch = strtolower(trim(($e['case_number'] ?? '') . ' ' . ($e['incident_type'] ?? '') . ' missed hearing no-show ' . ($e['respondent_name'] ?? '')));
       ?>
-      <div class="card event-card-missed-comp">
+      <div class="card event-card-missed-comp sanction-card"
+           data-sanction-role="complainant"
+           data-sanction-type="missed_hearing"
+           data-sanction-status="no_show"
+           data-sanction-search="<?= e($esearch) ?>">
         <div class="card-body" style="padding:14px 18px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
             <div style="display:flex;align-items:flex-start;gap:12px">
@@ -720,15 +781,20 @@ $unread_count = count(array_filter($notifications, fn($n) => $n['status'] !== 'r
     <?php endif; ?>
 
     <?php if (!empty($ev_referred_resp)): ?>
-    <div class="notices-subhdr" style="color:var(--rose-600)">
+    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="referred-respondent" style="color:var(--rose-600)">
       <span>🚔 Cases Referred to Authorities — You Are the Respondent</span>
     </div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
+    <div class="sanction-group" data-sanction-group="referred-respondent" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
       <?php foreach ($ev_referred_resp as $e):
         $ref = $referred_labels[$e['prescribed_action']] ?? ['⚖️','Case Referred','rose','This case has been referred to an external authority.'];
         [$ref_icon, $ref_label, $ref_color, $ref_desc] = $ref;
+        $esearch = strtolower(trim(($e['case_number'] ?? '') . ' ' . ($e['incident_type'] ?? '') . ' ' . $ref_label . ' referred escalated ' . ($e['complainant_name'] ?? '')));
       ?>
-      <div class="card event-card-referred-resp">
+      <div class="card event-card-referred-resp sanction-card"
+           data-sanction-role="respondent"
+           data-sanction-type="case_referred"
+           data-sanction-status="referred"
+           data-sanction-search="<?= e($esearch) ?>">
         <div class="card-body" style="padding:14px 18px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
             <div style="display:flex;align-items:flex-start;gap:12px">
@@ -763,15 +829,20 @@ $unread_count = count(array_filter($notifications, fn($n) => $n['status'] !== 'r
     <?php endif; ?>
 
     <?php if (!empty($ev_referred_comp)): ?>
-    <div class="notices-subhdr" style="color:var(--teal-600)">
+    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="referred-complainant" style="color:var(--teal-600)">
       <span>📋 Cases You Filed — Referred to Authorities</span>
     </div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
+    <div class="sanction-group" data-sanction-group="referred-complainant" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
       <?php foreach ($ev_referred_comp as $e):
         $ref = $referred_labels[$e['prescribed_action']] ?? ['⚖️','Case Referred','teal','This case has been referred to an external authority.'];
         [$ref_icon, $ref_label, $ref_color, $ref_desc] = $ref;
+        $esearch = strtolower(trim(($e['case_number'] ?? '') . ' ' . ($e['incident_type'] ?? '') . ' ' . $ref_label . ' referred escalated ' . ($e['respondent_name'] ?? '')));
       ?>
-      <div class="card event-card-referred-comp">
+      <div class="card event-card-referred-comp sanction-card"
+           data-sanction-role="complainant"
+           data-sanction-type="case_referred"
+           data-sanction-status="referred"
+           data-sanction-search="<?= e($esearch) ?>">
         <div class="card-body" style="padding:14px 18px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
             <div style="display:flex;align-items:flex-start;gap:12px">
@@ -807,12 +878,17 @@ $unread_count = count(array_filter($notifications, fn($n) => $n['status'] !== 'r
     <?php endif; ?>
 
     <?php if (!empty($ev_dismissed_comp)): ?>
-    <div class="notices-subhdr" style="color:var(--ink-400)">
+    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="dismissed-complainant" style="color:var(--ink-400)">
       <span>📁 Dismissed Cases — Cases You Filed</span>
     </div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
+    <div class="sanction-group" data-sanction-group="dismissed-complainant" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
       <?php foreach ($ev_dismissed_comp as $e): ?>
-      <div class="card event-card-dismissed">
+      <?php $esearch = strtolower(trim(($e['case_number'] ?? '') . ' ' . ($e['incident_type'] ?? '') . ' dismissed ' . ($e['respondent_name'] ?? ''))); ?>
+      <div class="card event-card-dismissed sanction-card"
+           data-sanction-role="complainant"
+           data-sanction-type="case_dismissed"
+           data-sanction-status="dismissed"
+           data-sanction-search="<?= e($esearch) ?>">
         <div class="card-body" style="padding:14px 18px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
             <div style="display:flex;align-items:flex-start;gap:12px">
@@ -855,12 +931,18 @@ $unread_count = count(array_filter($notifications, fn($n) => $n['status'] !== 'r
     <?php endif; ?>
 
     <?php if (!empty($ev_dismissed_resp)): ?>
-    <div class="notices-subhdr" style="color:var(--green-700)">
+    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="dismissed-respondent" style="color:var(--green-700)">
       <span>✅ Dismissed Cases — Against You (Resolved in Your Favor)</span>
     </div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
+    <div class="sanction-group" data-sanction-group="dismissed-respondent" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
       <?php foreach ($ev_dismissed_resp as $e): ?>
-      <div class="card" style="border-left:4px solid var(--green-400);background:linear-gradient(135deg,rgba(240,253,244,.6) 0%,var(--white) 60%)">
+      <?php $esearch = strtolower(trim(($e['case_number'] ?? '') . ' ' . ($e['incident_type'] ?? '') . ' dismissed ' . ($e['complainant_name'] ?? ''))); ?>
+      <div class="card sanction-card"
+           data-sanction-role="respondent"
+           data-sanction-type="case_dismissed"
+           data-sanction-status="dismissed"
+           data-sanction-search="<?= e($esearch) ?>"
+           style="border-left:4px solid var(--green-400);background:linear-gradient(135deg,rgba(240,253,244,.6) 0%,var(--white) 60%)">
         <div class="card-body" style="padding:14px 18px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
             <div style="display:flex;align-items:flex-start;gap:12px">
@@ -895,6 +977,8 @@ $unread_count = count(array_filter($notifications, fn($n) => $n['status'] !== 'r
     </div>
     <?php endif; ?>
 
+    <div id="sanction-pager" class="card-foot" style="display:none;border:1px solid var(--surface-2);border-radius:var(--r-sm)"></div>
+
   <?php endif; // no penalties/events ?>
 </div><!-- /panel-sanctions -->
 
@@ -914,12 +998,12 @@ $unread_count = count(array_filter($notifications, fn($n) => $n['status'] !== 'r
 
     <!-- Filter bar -->
     <div class="notices-filter-bar">
-      <select id="notif-filter-role" onchange="filterNotifs()" style="width:auto;min-width:160px">
+      <select id="notif-filter-role" onchange="filterNotifs(true)" style="width:auto;min-width:160px">
         <option value="">All Roles</option>
         <option value="complainant">As Complainant</option>
         <option value="respondent">As Respondent</option>
       </select>
-      <select id="notif-filter-type" onchange="filterNotifs()" style="width:auto;min-width:170px">
+      <select id="notif-filter-type" onchange="filterNotifs(true)" style="width:auto;min-width:170px">
         <option value="">All Types</option>
         <option value="hearing_scheduled">Hearing Scheduled</option>
         <option value="hearing_reminder">Hearing Reminder</option>
@@ -931,7 +1015,7 @@ $unread_count = count(array_filter($notifications, fn($n) => $n['status'] !== 'r
         <option value="case_dismissed">Case Dismissed</option>
         <option value="general">General</option>
       </select>
-      <select id="notif-filter-read" onchange="filterNotifs()" style="width:auto;min-width:140px">
+      <select id="notif-filter-read" onchange="filterNotifs(true)" style="width:auto;min-width:140px">
         <option value="">All Notices</option>
         <option value="unread">Unread Only</option>
         <option value="read">Read Only</option>
@@ -1090,12 +1174,43 @@ $unread_count = count(array_filter($notifications, fn($n) => $n['status'] !== 'r
     </div>
     <?php endif; ?>
 
+    <div id="notif-pager" class="card-foot" style="display:none;border:1px solid var(--surface-2);border-radius:var(--r-sm)"></div>
+
   <?php endif; // empty notifications ?>
 </div><!-- /panel-notices -->
 
 <?php endif; // has_any ?>
 
 <script>
+var sanctionPageSize = 8;
+var sanctionPage = 1;
+var notifPageSize = 8;
+var notifPage = 1;
+
+function renderPager(elId, page, total, pageSize, fnName) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  var pages = Math.max(1, Math.ceil(total / pageSize));
+  if (total <= pageSize) {
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+  page = Math.min(Math.max(1, page), pages);
+  var start = ((page - 1) * pageSize) + 1;
+  var end = Math.min(page * pageSize, total);
+  var first = Math.max(1, page - 2);
+  var last = Math.min(pages, page + 2);
+  var html = '<div class="pager"><span class="pager-info">Showing ' + start + '-' + end + ' of ' + total + '</span><div class="pager-btns">';
+  if (page > 1) html += '<button type="button" class="btn btn-outline btn-sm" onclick="' + fnName + '(' + (page - 1) + ')">Prev</button>';
+  for (var i = first; i <= last; i++) {
+    html += '<button type="button" class="btn ' + (i === page ? 'btn-primary' : 'btn-outline') + ' btn-sm" onclick="' + fnName + '(' + i + ')">' + i + '</button>';
+  }
+  if (page < pages) html += '<button type="button" class="btn btn-outline btn-sm" onclick="' + fnName + '(' + (page + 1) + ')">Next</button>';
+  html += '</div></div>';
+  el.innerHTML = html;
+  el.style.display = '';
+}
 // ── Tab switching ─────────────────────────────────────────────
 function switchTab(name, btn) {
   document.querySelectorAll('.ntab').forEach(function(t){ t.classList.remove('active'); });
@@ -1105,22 +1220,101 @@ function switchTab(name, btn) {
   if (panel) panel.classList.add('active');
 }
 
+// ── Sanction filters ──────────────────────────────────────
+function filterSanctions(resetPage) {
+  if (resetPage) sanctionPage = 1;
+
+  var search = (document.getElementById('sanction-search')?.value || '').trim().toLowerCase();
+  var role   = document.getElementById('sanction-filter-role')?.value || '';
+  var type   = document.getElementById('sanction-filter-type')?.value || '';
+  var status = document.getElementById('sanction-filter-status')?.value || '';
+
+  var cards = document.querySelectorAll('#panel-sanctions .sanction-card');
+  var matched = [];
+
+  cards.forEach(function(card) {
+    var matchSearch = !search || (card.dataset.sanctionSearch || '').includes(search);
+    var matchRole   = !role   || card.dataset.sanctionRole === role;
+    var matchType   = !type   || card.dataset.sanctionType === type;
+    var matchStatus = !status || card.dataset.sanctionStatus === status;
+    if (matchSearch && matchRole && matchType && matchStatus) matched.push(card);
+  });
+
+  var pages = Math.max(1, Math.ceil(matched.length / sanctionPageSize));
+  sanctionPage = Math.min(Math.max(1, sanctionPage), pages);
+  var start = (sanctionPage - 1) * sanctionPageSize;
+  var end = start + sanctionPageSize;
+
+  cards.forEach(function(card) {
+    var idx = matched.indexOf(card);
+    var show = idx >= start && idx < end;
+    card.style.display = show ? '' : 'none';
+  });
+
+  document.querySelectorAll('#panel-sanctions .sanction-group').forEach(function(group) {
+    var anyVisible = Array.from(group.querySelectorAll('.sanction-card')).some(function(card) {
+      return card.style.display !== 'none';
+    });
+    group.style.display = anyVisible ? 'flex' : 'none';
+  });
+
+  document.querySelectorAll('#panel-sanctions .sanctions-subhdr').forEach(function(header) {
+    var group = document.querySelector('#panel-sanctions .sanction-group[data-sanction-group="' + header.dataset.sanctionGroup + '"]');
+    var anyVisible = group && group.style.display !== 'none';
+    header.style.display = anyVisible ? '' : 'none';
+  });
+
+  var noResults = document.getElementById('sanction-no-results');
+  if (noResults) noResults.style.display = (cards.length > 0 && matched.length === 0) ? '' : 'none';
+  renderPager('sanction-pager', sanctionPage, matched.length, sanctionPageSize, 'changeSanctionPage');
+
+  var countEl = document.getElementById('sanction-count');
+  if (countEl) {
+    var hasFilter = search || role || type || status;
+    countEl.textContent = hasFilter ? 'Showing ' + matched.length + ' of ' + cards.length : '';
+  }
+}
+
+function changeSanctionPage(page) {
+  sanctionPage = page;
+  filterSanctions(false);
+}
+
+function clearSanctionFilters() {
+  ['sanction-search','sanction-filter-role','sanction-filter-type','sanction-filter-status'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  filterSanctions(true);
+}
+
 // ── Notification filters ──────────────────────────────────────
-function filterNotifs() {
+function filterNotifs(resetPage) {
+  if (resetPage) notifPage = 1;
+
   var role  = document.getElementById('notif-filter-role')?.value  || '';
   var type  = document.getElementById('notif-filter-type')?.value  || '';
   var read  = document.getElementById('notif-filter-read')?.value  || '';
 
-  var cards  = document.querySelectorAll('[data-role]');
-  var visible = 0;
+  var cards  = document.querySelectorAll('#panel-notices [data-role]');
+  var matched = [];
 
   cards.forEach(function(card) {
     var matchRole = !role || card.dataset.role === role;
     var matchType = !type || card.dataset.type === type;
     var matchRead = !read || card.dataset.read === read;
-    var show = matchRole && matchType && matchRead;
+    if (matchRole && matchType && matchRead) matched.push(card);
+  });
+
+  var pages = Math.max(1, Math.ceil(matched.length / notifPageSize));
+  notifPage = Math.min(Math.max(1, notifPage), pages);
+  var start = (notifPage - 1) * notifPageSize;
+  var end = start + notifPageSize;
+
+  cards.forEach(function(card) {
+    var idx = matched.indexOf(card);
+    var show = idx >= start && idx < end;
     card.style.display = show ? '' : 'none';
-    if (show) visible++;
   });
 
   // Show/hide subheaders based on visible cards in each group
@@ -1129,18 +1323,24 @@ function filterNotifs() {
     var shdr = document.getElementById('subhdr-' + r);
     if (!grp || !shdr) return;
     var anyVisible = Array.from(grp.querySelectorAll('[data-role]')).some(function(c){ return c.style.display !== 'none'; });
-    grp.style.display  = anyVisible ? '' : 'none';
+    grp.style.display  = anyVisible ? 'flex' : 'none';
     shdr.style.display = anyVisible ? '' : 'none';
   });
 
   var noResults = document.getElementById('notif-no-results');
-  if (noResults) noResults.style.display = (cards.length > 0 && visible === 0) ? '' : 'none';
+  if (noResults) noResults.style.display = (cards.length > 0 && matched.length === 0) ? '' : 'none';
+  renderPager('notif-pager', notifPage, matched.length, notifPageSize, 'changeNotifPage');
 
   var countEl = document.getElementById('notif-count');
   if (countEl) {
     var hasFilter = role || type || read;
-    countEl.textContent = hasFilter ? 'Showing ' + visible + ' of ' + cards.length : '';
+    countEl.textContent = hasFilter ? 'Showing ' + matched.length + ' of ' + cards.length : '';
   }
+}
+
+function changeNotifPage(page) {
+  notifPage = page;
+  filterNotifs(false);
 }
 
 function clearNotifFilters() {
@@ -1148,6 +1348,9 @@ function clearNotifFilters() {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
-  filterNotifs();
+  filterNotifs(true);
 }
+
+filterSanctions(false);
+filterNotifs(false);
 </script>

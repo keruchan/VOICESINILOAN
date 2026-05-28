@@ -105,7 +105,7 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
           <td class="td-mono"><?= e($b['case_number']) ?></td>
           <td class="td-main"><?= e($b['incident_type']) ?></td>
           <td><?= e($b['respondent_name'] ?: '—') ?></td>
-          <td><span class="chip <?= $lm[$b['violation_level']]??'ch-slate' ?>"><?= ucfirst($b['violation_level']) ?></span></td>
+          <!-- <td><span class="chip <?= $lm[$b['violation_level']]??'ch-slate' ?>"><?= ucfirst($b['violation_level']) ?></span></td> -->
           <td><span class="chip <?= $sm[$b['status']]??'ch-slate' ?>"><?= ucwords(str_replace('_',' ',$b['status'])) ?></span></td>
           <td style="font-size:12px;color:var(--ink-500)"><?= e(ucwords(str_replace('_',' ',$b['prescribed_action']??''))) ?: '—' ?></td>
           <td style="font-size:12px;color:var(--ink-400)"><?= date('M j, Y', strtotime($b['created_at'])) ?></td>

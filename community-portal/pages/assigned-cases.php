@@ -51,6 +51,32 @@ $all_against_ids = array_merge(
     array_column($name_cases,   'id')
 );
 
+$case_per = 5;
+$direct_total = count($direct_cases);
+$direct_pg = max(1, (int)($_GET['direct_pg'] ?? 1));
+$direct_pages = max(1, (int)ceil($direct_total / $case_per));
+$direct_pg = min($direct_pg, $direct_pages);
+$direct_off = ($direct_pg - 1) * $case_per;
+$direct_cases_page = array_slice($direct_cases, $direct_off, $case_per);
+
+$name_total = count($name_cases);
+$name_pg = max(1, (int)($_GET['name_pg'] ?? 1));
+$name_pages = max(1, (int)ceil($name_total / $case_per));
+$name_pg = min($name_pg, $name_pages);
+$name_off = ($name_pg - 1) * $case_per;
+$name_cases_page = array_slice($name_cases, $name_off, $case_per);
+
+if (!function_exists('acq')) {
+    function acq(array $o = []): string {
+        $b = array_filter([
+            'page' => 'assigned-cases',
+            'direct_pg' => $_GET['direct_pg'] ?? '',
+            'name_pg' => $_GET['name_pg'] ?? '',
+        ], fn($v) => $v !== '');
+        return '?' . http_build_query(array_merge($b, $o));
+    }
+}
+
 // Penalties against me (missed_party = respondent or both, blotter in my cases)
 $my_penalties = [];
 if (!empty($all_against_ids)) {
@@ -163,7 +189,7 @@ $total = count($direct_cases) + count($name_cases);
   Cases Filed Against You
 </div>
 <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:22px">
-  <?php foreach ($direct_cases as $b): ?>
+  <?php foreach ($direct_cases_page as $b): ?>
   <div class="card">
     <div class="card-body" style="padding:16px 18px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:10px">
@@ -198,6 +224,18 @@ $total = count($direct_cases) + count($name_cases);
     </div>
   </div>
   <?php endforeach; ?>
+  <?php if ($direct_total > $case_per): ?>
+  <div class="card-foot" style="border:1px solid var(--surface-2);border-radius:var(--r-sm)">
+    <div class="pager">
+      <span class="pager-info">Showing <?= min($direct_off+1,$direct_total) ?>-<?= min($direct_off+$case_per,$direct_total) ?> of <?= $direct_total ?></span>
+      <div class="pager-btns">
+        <?php if ($direct_pg>1): ?><a href="<?= acq(['direct_pg'=>$direct_pg-1]) ?>" class="btn btn-outline btn-sm">Prev</a><?php endif; ?>
+        <?php for ($i=max(1,$direct_pg-2);$i<=min($direct_pages,$direct_pg+2);$i++): ?><a href="<?= acq(['direct_pg'=>$i]) ?>" class="btn <?= $i===$direct_pg?'btn-primary':'btn-outline' ?> btn-sm"><?= $i ?></a><?php endfor; ?>
+        <?php if ($direct_pg<$direct_pages): ?><a href="<?= acq(['direct_pg'=>$direct_pg+1]) ?>" class="btn btn-outline btn-sm">Next</a><?php endif; ?>
+      </div>
+    </div>
+  </div>
+  <?php endif; ?>
 </div>
 <?php endif; ?>
 
@@ -210,7 +248,7 @@ $total = count($direct_cases) + count($name_cases);
     <table>
       <thead><tr><th>Case No.</th><th>Type</th><th>Level</th><th>Status</th><th>Complainant</th><th>Date</th><th></th></tr></thead>
       <tbody>
-      <?php foreach ($name_cases as $b): ?>
+      <?php foreach ($name_cases_page as $b): ?>
         <tr>
           <td class="td-mono"><?= e($b['case_number']) ?></td>
           <td class="td-main"><?= e($b['incident_type']) ?></td>
@@ -224,6 +262,18 @@ $total = count($direct_cases) + count($name_cases);
       </tbody>
     </table>
   </div>
+  <?php if ($name_total > $case_per): ?>
+  <div class="card-foot">
+    <div class="pager">
+      <span class="pager-info">Showing <?= min($name_off+1,$name_total) ?>-<?= min($name_off+$case_per,$name_total) ?> of <?= $name_total ?></span>
+      <div class="pager-btns">
+        <?php if ($name_pg>1): ?><a href="<?= acq(['name_pg'=>$name_pg-1]) ?>" class="btn btn-outline btn-sm">Prev</a><?php endif; ?>
+        <?php for ($i=max(1,$name_pg-2);$i<=min($name_pages,$name_pg+2);$i++): ?><a href="<?= acq(['name_pg'=>$i]) ?>" class="btn <?= $i===$name_pg?'btn-primary':'btn-outline' ?> btn-sm"><?= $i ?></a><?php endfor; ?>
+        <?php if ($name_pg<$name_pages): ?><a href="<?= acq(['name_pg'=>$name_pg+1]) ?>" class="btn btn-outline btn-sm">Next</a><?php endif; ?>
+      </div>
+    </div>
+  </div>
+  <?php endif; ?>
 </div>
 <?php endif; ?>
 

@@ -199,16 +199,16 @@ if (!$bgy_init) $bgy_init = 'BG';
             <?php endforeach; ?>
           </select>
         </div>
-        <div class="fg" style="margin-bottom:0">
+        <!-- <div class="fg" style="margin-bottom:0">
           <label>Violation Level <span class="req">*</span></label>
           <select id="nb-level">
             <option value="">--- Select ---</option>
             <option value="minor">Minor</option>
             <option value="moderate">Moderate</option>
             <option value="serious">Serious</option>
-            <option value="critical">Critical</option>
+            <option value="critica  l">Critical</option>
           </select>
-        </div>
+        </div> -->
         <div class="fg" style="margin-bottom:0">
           <label>Incident Date <span class="req">*</span></label>
           <input type="date" id="nb-date" max="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>">

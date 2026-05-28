@@ -51,6 +51,8 @@ nav::-webkit-scrollbar{width:0}
 .nav-badge{font-size:10px;font-weight:700;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:20px;padding:0 5px}
 .nb-rose{background:rgba(251,113,133,.2);color:var(--rose-400)}
 .nb-amber{background:rgba(245,158,11,.2);color:var(--amber-400)}
+.nav-a .nav-badge.nb-rose{background:rgba(251,113,133,.2);color:var(--rose-400)}
+.nav-a .nav-badge.nb-amber{background:rgba(245,158,11,.2);color:var(--amber-400)}
 .nav-hr{height:1px;background:rgba(255,255,255,.05);margin:5px 10px}
 .sb-foot{padding:10px 8px;border-top:1px solid rgba(255,255,255,.06)}
 .logout-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);text-decoration:none;transition:background .12s}

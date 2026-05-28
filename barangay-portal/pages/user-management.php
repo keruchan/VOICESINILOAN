@@ -272,7 +272,7 @@ $av_palette = ['#0D7377','#047857','#6D28D9','#1F4068','#B45309','#BE123C','#036
           <div style="margin-top:4px" id="pd-status-chip"></div>
         </div>
       </div>
-      <button class="panel-x" onclick="closePanel('panel-user')">&#x2715;</button>
+      <button class="panel-x" onclick="closeUserPanelShell('panel-user')">&#x2715;</button>
     </div>
 
     <!-- Scrollable body -->
@@ -460,10 +460,10 @@ function setStatusFilter(v){ document.getElementById('um-status').value = v; umA
 function umClearSearch(){ document.getElementById('um-search').value = ''; umApplyFilters(); }
 
 // ── Panel open/close ──────────────────────────────
-function openPanel(id){ document.getElementById(id).classList.add('open'); document.body.style.overflow = 'hidden'; }
-function closePanel(id){ document.getElementById(id).classList.remove('open'); document.body.style.overflow = ''; }
+function openUserPanelShell(id){ document.getElementById(id).classList.add('open'); document.body.style.overflow = 'hidden'; }
+function closeUserPanelShell(id){ document.getElementById(id).classList.remove('open'); document.body.style.overflow = ''; }
 document.getElementById('panel-user').addEventListener('click', function(e){
-  if (e.target === this) closePanel('panel-user');
+  if (e.target === this) closeUserPanelShell('panel-user');
 });
 
 // ── Open user panel — show skeleton, fire AJAX ────
@@ -489,7 +489,7 @@ function openUserPanel(rowData) {
   hideMsg('edit-msg');
   hideMsg('pass-msg');
 
-  openPanel('panel-user');
+  openUserPanelShell('panel-user');
 
   // Fetch full user data + cases
   fetch(UM_AJAX + '?ajax_action=get_user&user_id=' + pdUser.id)
@@ -509,7 +509,7 @@ function openUserPanel(rowData) {
         showPdError('Server returned an error: ' + (d.message || 'Unknown error.'));
         return;
       }
-      renderPanel(d.user);
+      renderUserPanel(d.user);
     })
     .catch(function(err) {
       document.getElementById('pd-loading').style.display = 'none';
@@ -525,7 +525,7 @@ function showPdError(msg) {
 }
 
 // ── Render all panel sections from AJAX data ──────
-function renderPanel(u) {
+function renderUserPanel(u) {
   // Merge AJAX data back into pdUser (AJAX has full_name, contact_number etc.)
   pdUser.name    = u.full_name    || pdUser.name;
   pdUser.email   = u.email        || pdUser.email;
@@ -608,7 +608,7 @@ function renderToggleBtn(u) {
       var uid    = parseInt(this.getAttribute('data-uid'), 10);
       var status = parseInt(this.getAttribute('data-status'), 10);
       var name   = this.getAttribute('data-name');
-      closePanel('panel-user');
+      closeUserPanelShell('panel-user');
       confirmToggle(uid, status, name);
     });
   }

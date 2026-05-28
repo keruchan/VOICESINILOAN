@@ -30,17 +30,87 @@ try {
 } catch (PDOException $e) {}
 
 // Sidebar badge counts
-$badge_blotters = $badge_cases = $badge_notices = $badge_med = 0;
+$badge_blotters = $badge_cases = $badge_notices = $badge_med = $badge_sanctions = 0;
 try {
-    $uname_esc = addslashes($user['name'] ?? '');
-    // My active blotters (filed by me, not resolved/closed/dismissed)
-    $badge_blotters = (int)$pdo->query("SELECT COUNT(*) FROM blotters WHERE complainant_user_id=$uid AND status NOT IN ('resolved','closed','transferred','dismissed')")->fetchColumn();
+    $uname = trim($user['name'] ?? '');
+    $name_parts = array_filter(preg_split('/[\s,]+/', $uname), fn($p) => strlen($p) > 2);
+    $name_likes = [];
+    foreach ($name_parts as $part) {
+        $name_likes[] = 'b.respondent_name LIKE ' . $pdo->quote('%' . $part . '%');
+    }
+    $name_match_sql = $name_likes ? '(' . implode(' AND ', $name_likes) . ')' : '1=0';
+    $respondent_scope_sql = "(b.respondent_user_id=$uid OR (b.respondent_user_id IS NULL AND $name_match_sql))";
+
+    // All blotters filed by me
+    $badge_blotters = (int)$pdo->query("SELECT COUNT(*) FROM blotters WHERE complainant_user_id=$uid")->fetchColumn();
     // Cases where I am named respondent — respondent_user_id (direct) OR name match (walk-in)
-    $badge_cases = (int)$pdo->query("SELECT COUNT(*) FROM blotters WHERE barangay_id=$bid AND (respondent_user_id=$uid OR (respondent_user_id IS NULL AND respondent_name LIKE '%$uname_esc%')) AND status NOT IN ('resolved','closed','dismissed')")->fetchColumn();
-    // Unread notifications — party_notifications table (notices table is empty/unused)
+    $badge_cases = (int)$pdo->query("SELECT COUNT(*) FROM blotters b WHERE b.barangay_id=$bid AND $respondent_scope_sql AND b.status NOT IN ('resolved','closed','dismissed')")->fetchColumn();
+    // Unread notices — party_notifications table (notices table is empty/unused)
     $badge_notices = (int)$pdo->query("SELECT COUNT(*) FROM party_notifications WHERE recipient_user_id=$uid AND read_at IS NULL AND status IN ('pending','sent')")->fetchColumn();
     // Upcoming mediations — both as complainant AND as respondent
-    $badge_med = (int)$pdo->query("SELECT COUNT(*) FROM mediation_schedules ms JOIN blotters b ON b.id=ms.blotter_id WHERE b.barangay_id=$bid AND ms.status='scheduled' AND ms.hearing_date>=CURDATE() AND (b.complainant_user_id=$uid OR b.respondent_user_id=$uid OR b.respondent_name LIKE '%$uname_esc%')")->fetchColumn();
+    $badge_med = (int)$pdo->query("SELECT COUNT(DISTINCT ms.id) FROM mediation_schedules ms JOIN blotters b ON b.id=ms.blotter_id WHERE b.barangay_id=$bid AND ms.status='scheduled' AND ms.hearing_date>=CURDATE() AND (b.complainant_user_id=$uid OR $respondent_scope_sql)")->fetchColumn();
+
+    // Sanctions shown in Notices & Sanctions: formal penalties + event-derived sanctions.
+    $badge_penalties = (int)$pdo->query("
+        SELECT COUNT(DISTINCT p.id)
+        FROM penalties p
+        JOIN blotters b ON b.id = p.blotter_id
+        WHERE b.barangay_id = $bid
+          AND (
+            (p.missed_party IN ('respondent','both') AND $respondent_scope_sql)
+            OR (p.missed_party IN ('complainant','both') AND b.complainant_user_id = $uid)
+          )
+    ")->fetchColumn();
+    $badge_event_sanctions = (int)$pdo->query("
+        SELECT COUNT(*) FROM (
+            SELECT CONCAT('missed_resp:', ms.id) AS sanction_key
+            FROM mediation_schedules ms
+            JOIN blotters b ON b.id = ms.blotter_id
+            WHERE b.barangay_id = $bid
+              AND ms.missed_session = 1
+              AND ms.no_show_by IN ('respondent','both')
+              AND $respondent_scope_sql
+            UNION
+            SELECT CONCAT('missed_comp:', ms.id) AS sanction_key
+            FROM mediation_schedules ms
+            JOIN blotters b ON b.id = ms.blotter_id
+            WHERE b.barangay_id = $bid
+              AND b.complainant_user_id = $uid
+              AND ms.missed_session = 1
+              AND ms.no_show_by IN ('complainant','both')
+            UNION
+            SELECT CONCAT('referred_resp:', b.id) AS sanction_key
+            FROM blotters b
+            WHERE b.barangay_id = $bid
+              AND $respondent_scope_sql
+              AND (
+                b.prescribed_action IN ('refer_police','refer_vawc','escalate_municipality')
+                OR b.status IN ('escalated','cfa_issued','transferred')
+              )
+            UNION
+            SELECT CONCAT('referred_comp:', b.id) AS sanction_key
+            FROM blotters b
+            WHERE b.barangay_id = $bid
+              AND b.complainant_user_id = $uid
+              AND (
+                b.prescribed_action IN ('refer_police','refer_vawc','escalate_municipality')
+                OR b.status IN ('escalated','cfa_issued','transferred')
+              )
+            UNION
+            SELECT CONCAT('dismissed_comp:', b.id) AS sanction_key
+            FROM blotters b
+            WHERE b.barangay_id = $bid
+              AND b.complainant_user_id = $uid
+              AND b.status = 'dismissed'
+            UNION
+            SELECT CONCAT('dismissed_resp:', b.id) AS sanction_key
+            FROM blotters b
+            WHERE b.barangay_id = $bid
+              AND $respondent_scope_sql
+              AND b.status = 'dismissed'
+        ) sanctions
+    ")->fetchColumn();
+    $badge_sanctions = $badge_penalties + $badge_event_sanctions;
 } catch (PDOException $e) {}
 ?>
 <!DOCTYPE html>
@@ -109,7 +179,8 @@ try {
       <a class="nav-a <?= $page==='notices'?'active':'' ?>" href="?page=notices">
         <svg class="nav-ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 1.5C5.5 1.5 3.5 3.5 3.5 6v4L2 12h12l-1.5-2V6C12.5 3.5 10.5 1.5 8 1.5z"/><path d="M6.5 12a1.5 1.5 0 0 0 3 0"/></svg>
         <span class="nav-lbl">Notices & Sanctions</span>
-        <?php if ($badge_notices > 0): ?><span class="nav-badge nb-rose"><?= $badge_notices ?></span><?php endif; ?>
+        <?php if ($badge_notices > 0): ?><span class="nav-badge nb-rose" title="Unread notices"><?= $badge_notices ?></span><?php endif; ?>
+        <?php if ($badge_sanctions > 0): ?><span class="nav-badge nb-amber" title="Sanctions"><?= $badge_sanctions ?></span><?php endif; ?>
       </a>
 
       <a class="nav-a <?= $page==='history'?'active':'' ?>" href="?page=history">

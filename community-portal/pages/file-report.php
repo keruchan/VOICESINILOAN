@@ -461,7 +461,7 @@ try {
           </div>
 
           <!-- Auto-severity indicator -->
-          <input type="hidden" name="violation_level" id="violation-level-input" value="<?= e($_POST['violation_level'] ?? 'minor') ?>">
+          <!-- <input type="hidden" name="violation_level" id="violation-level-input" value="<?= e($_POST['violation_level'] ?? 'minor') ?>">
           <div id="severity-card" style="display:none;border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;border:1px solid;transition:all .2s">
             <div style="font-size:10px;font-weight:700;color:var(--ink-400);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">Auto-assigned Severity Level</div>
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
@@ -474,7 +474,7 @@ try {
               </div>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--ink-300)" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11.5" r=".5" fill="currentColor"/></svg>
             </div>
-          </div>
+          </div> -->
 
           <!-- ── INCIDENT LOCATION ── -->
           <fieldset style="border:1px solid var(--ink-100);border-radius:var(--r-lg);padding:14px 14px 10px;margin-bottom:16px">

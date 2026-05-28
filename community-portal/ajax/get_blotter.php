@@ -10,8 +10,20 @@ $id  = (int)($_GET['id'] ?? 0);
 if (!$id) jsonResponse(false, 'Invalid ID.');
 
 try {
-    // Community users can view blotters they filed OR where they are named violator
+    // Community users can view blotters they filed OR where they are the respondent.
     $uname = $_SESSION['user_name'] ?? '';
+    $parts = $uname ? array_filter(preg_split('/[\s,]+/', $uname), fn($p) => strlen($p) > 2) : [];
+    $nameConds = [];
+    $params = [$id, $bid, $uid, $uid, $uid];
+
+    foreach ($parts as $part) {
+        $nameConds[] = 'b.respondent_name LIKE ?';
+        $params[] = "%$part%";
+    }
+
+    $nameMatchSql = $nameConds
+        ? 'OR (b.respondent_user_id IS NULL AND ' . implode(' AND ', $nameConds) . ')'
+        : '';
 
     $s = $pdo->prepare("
         SELECT b.* FROM blotters b
@@ -19,12 +31,13 @@ try {
           AND b.barangay_id = ?
           AND (
             b.complainant_user_id = ?
+            OR b.respondent_user_id = ?
             OR EXISTS (SELECT 1 FROM violations v WHERE v.blotter_id=b.id AND v.user_id=?)
-            OR b.respondent_name LIKE ?
+            $nameMatchSql
           )
         LIMIT 1
     ");
-    $s->execute([$id, $bid, $uid, $uid, "%$uname%"]);
+    $s->execute($params);
     $blotter = $s->fetch();
     if (!$blotter) jsonResponse(false, 'Not found or access denied.');
 
