@@ -119,7 +119,7 @@ try {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title><?= e($titles[$page]) ?> — VOICE2 Community</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,700;1,9..144,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -269,7 +269,7 @@ function viewBlotter(id){
   document.getElementById('panel-case-sub').textContent = '';
   document.getElementById('panel-body').innerHTML = `
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:12px;color:var(--ink-400)">
-      <div style="width:32px;height:32px;border:3px solid var(--ink-100);border-top-color:var(--green-500);border-radius:50%;animation:spin .7s linear infinite"></div>
+      <div style="width:32px;height:32px;border:3px solid var(--ink-100);border-top-color:var(--teal-500);border-radius:50%;animation:spin .7s linear infinite"></div>
       <span style="font-size:13px">Loading case details…</span>
     </div>`;
   openPanel();
@@ -338,12 +338,12 @@ function viewBlotter(id){
 
       // ── Mediation ──
       const medSection = b.mediation ? `
-        <div class="card mb16" style="border-top:3px solid var(--green-500)">
+        <div class="card mb16" style="border-top:3px solid var(--teal-500)">
           <div class="card-hdr"><span class="card-title">📅 Scheduled Mediation</span></div>
           <div class="card-body" style="padding:14px 18px">
-            <div style="background:var(--green-50);border:1px solid var(--green-100);border-radius:var(--r-md);padding:12px 14px;margin-bottom:10px">
-              <div style="font-size:17px;font-weight:700;color:var(--green-700)">${new Date(b.mediation.hearing_date+'T00:00').toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
-              ${b.mediation.hearing_time ? `<div style="font-size:14px;color:var(--green-600);margin-top:4px">⏰ ${b.mediation.hearing_time}</div>` : ''}
+            <div style="background:var(--teal-50);border:1px solid var(--teal-100);border-radius:var(--r-md);padding:12px 14px;margin-bottom:10px">
+              <div style="font-size:17px;font-weight:700;color:var(--teal-700)">${new Date(b.mediation.hearing_date+'T00:00').toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
+              ${b.mediation.hearing_time ? `<div style="font-size:14px;color:var(--teal-600);margin-top:4px">⏰ ${b.mediation.hearing_time}</div>` : ''}
               <div style="font-size:12px;color:var(--ink-500);margin-top:4px">📍 ${esc(b.mediation.venue||'Barangay Hall')}</div>
             </div>
           </div>
@@ -382,7 +382,7 @@ function viewBlotter(id){
           <div class="card mb16">
             <div class="card-hdr">
               <span class="card-title">📍 Incident Location</span>
-              <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}" target="_blank" style="font-size:11px;color:var(--green-600);font-weight:600;text-decoration:none">Open in Maps ↗</a>
+              <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}" target="_blank" style="font-size:11px;color:var(--teal-600);font-weight:600;text-decoration:none">Open in Maps ↗</a>
             </div>
             <div class="card-body" style="padding:0">
               <div id="view-map-${id}" style="height:220px;width:100%"></div>
