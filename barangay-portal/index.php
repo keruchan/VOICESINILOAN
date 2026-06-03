@@ -522,8 +522,14 @@ function renderPanel(b) {
   window._panelRespUserId    = b.respondent_user_id || null;
   window._panelRespLinked    = !!b.respondent_user_id;
 
+  // Store full blotter for Case Report
+  window._currentBlotter = b;
+
   document.getElementById('panel-body').innerHTML =
-    '<div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">' + levelChip(b.violation_level) + ' ' + statusChip(b.status) + '</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center">' +
+      levelChip(b.violation_level) + ' ' + statusChip(b.status) +
+      '<button class="btn btn-outline btn-sm" style="margin-left:auto;border-color:var(--navy-200);color:var(--navy-700)" onclick="openCaseReport()">&#x1F4C4; Case Report</button>' +
+    '</div>' +
 
     // ── Complainant (read-only) ──
     '<div class="card mb16">' +

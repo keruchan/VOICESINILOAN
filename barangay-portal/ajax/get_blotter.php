@@ -37,6 +37,26 @@ try {
     $att->execute([$id]);
     $b['attachments'] = $att->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+    // Mediation sessions (for Case Report)
+    $meds = $pdo->prepare("
+        SELECT id, hearing_date, hearing_time, venue, status,
+               complainant_attended, respondent_attended, outcome, next_steps, created_at
+        FROM mediation_schedules
+        WHERE blotter_id = ?
+        ORDER BY hearing_date ASC
+    ");
+    $meds->execute([$id]);
+    $b['mediation_sessions'] = $meds->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    // Recording officer name
+    if (!empty($b['filed_by_user_id'])) {
+        $off = $pdo->prepare("SELECT name FROM users WHERE id = ? LIMIT 1");
+        $off->execute([$b['filed_by_user_id']]);
+        $b['filed_by_name'] = $off->fetchColumn() ?: null;
+    } else {
+        $b['filed_by_name'] = null;
+    }
+
     echo json_encode(['success'=>true,'message'=>'OK','data'=>$b]);
 } catch (PDOException $e) {
     error_log('get_blotter.php: ' . $e->getMessage());

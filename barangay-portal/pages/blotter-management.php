@@ -150,6 +150,34 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
   </div>
 </div>
 
+<!-- ══ Case Report Modal ══ -->
+<div class="modal-overlay" id="modal-case-report">
+  <div class="modal" style="max-width:860px;width:95vw;max-height:95vh;overflow:hidden;display:flex;flex-direction:column;padding:0;border-radius:var(--r-xl)">
+    <div class="modal-hdr" style="position:sticky;top:0;z-index:10;background:var(--white);flex-shrink:0">
+      <span class="modal-title">📄 Barangay Case Report</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-outline btn-sm" onclick="printCaseReport()">🖨️ Print</button>
+        <button class="btn btn-primary btn-sm" onclick="exportCaseReportPDF()">⬇ Export PDF</button>
+        <button class="modal-x" onclick="closeModal('modal-case-report')">×</button>
+      </div>
+    </div>
+    <div style="flex:1;overflow-y:auto;background:var(--surface-2);padding:24px 20px">
+      <div id="cr-loading" style="text-align:center;padding:60px;color:var(--ink-300)">
+        <div class="spinner" style="margin:0 auto 16px;width:32px;height:32px;border-width:2px;border-color:rgba(20,145,155,.2);border-top-color:var(--teal-600)"></div>
+        Generating case report…
+      </div>
+      <div id="cr-document" style="display:none;background:white;max-width:794px;margin:0 auto;box-shadow:0 4px 24px rgba(0,0,0,.15);padding:56px 64px;min-height:1000px"></div>
+    </div>
+    <div class="modal-foot" style="flex-shrink:0;justify-content:space-between">
+      <button class="btn btn-ghost" onclick="closeModal('modal-case-report')">Close</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline" onclick="printCaseReport()">🖨️ Print</button>
+        <button class="btn btn-primary" onclick="exportCaseReportPDF()">⬇ Export PDF</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Schedule Mediation Modal -->
 <div class="modal-overlay" id="modal-schedule-med">
   <div class="modal">
@@ -440,9 +468,12 @@ function renderPanel(b) {
       ✨ Status will auto-set to: <span id="auto-status-label"></span>
     </div>`;
 
+  window._currentBlotter = b;
+
   document.getElementById('panel-body').innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
       ${levelChip(b.violation_level)} ${statusChip(b.status)}
+      <button class="btn btn-outline btn-sm" style="margin-left:auto;border-color:var(--navy-200);color:var(--navy-700)" onclick="openCaseReport()">📄 Case Report</button>
     </div>
 
     ${noRespNote}
@@ -513,6 +544,428 @@ function renderPanel(b) {
       ${timeline}` : ''}
   `;
 }
+
+// ─── Case Report ─────────────────────────────────────────────────────────────
+
+const BGY_INFO = <?= json_encode([
+  'name'         => $bgy['name']         ?? 'Barangay',
+  'municipality' => $bgy['municipality'] ?? '',
+  'province'     => $bgy['province']     ?? '',
+  'captain_name' => $bgy['captain_name'] ?? '',
+  'contact_no'   => $bgy['contact_no']   ?? '',
+]) ?>;
+const CURRENT_OFFICER = <?= json_encode($user['name'] ?? 'Barangay Officer') ?>;
+
+function openCaseReport() {
+  const b = window._currentBlotter;
+  if (!b) return;
+  openModal('modal-case-report');
+  document.getElementById('cr-loading').style.display = 'block';
+  document.getElementById('cr-document').style.display = 'none';
+  setTimeout(() => renderCaseReport(b), 180);
+}
+
+function crEsc(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function crFmtDate(s) {
+  if (!s) return '—';
+  const d = new Date(s.length === 10 ? s + 'T00:00:00' : s);
+  if (isNaN(d)) return String(s).substring(0, 10);
+  return d.toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' });
+}
+function crFmtTime(s) {
+  if (!s || s === '00:00:00') return '';
+  const p = String(s).split(':');
+  let h = parseInt(p[0]), m = p[1] || '00';
+  const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${m} ${ap}`;
+}
+function crOrdinal(n) {
+  const s = ['th','st','nd','rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+const CR_ACTION_LABELS = {
+  refer_police:'Referral to the Philippine National Police (PNP)',
+  refer_vawc:'Referral to the Violence Against Women and Children (VAWC) Desk',
+  refer_dswd:'Referral to the Department of Social Welfare and Development (DSWD)',
+  refer_nbi:'Referral to the National Bureau of Investigation (NBI)',
+  escalate_municipality:'Escalation to the Municipality',
+  transfer_barangay:'Transfer to Another Barangay',
+  certificate_to_file:'Issuance of Certificate to File Action',
+  mediation:'Barangay Mediation',
+  conciliation:'Conciliation / Amicable Settlement',
+  summon_issued:'Issuance of Summons to the Parties',
+  lupon_hearing:'Lupon Tagapamayapa Hearing',
+  pangkat_hearing:'Pangkat ng Tagapagkasundo Hearing',
+  written_agreement:'Execution of Written Agreement',
+  sanction_imposed:'Imposition of Sanction or Fine',
+  no_action_needed:'No Further Action Required',
+  withdrawn_by_complainant:'Withdrawal by the Complainant',
+  dismissed:'Dismissal of the Complaint',
+  document_only:'Documentation Only — No Further Action',
+  active_response:'Active Response Required',
+  noise_abatement:'Noise Abatement Order / Warning',
+  cleanup_order:'Cleanup / Environmental Order',
+  site_inspection:'Site Inspection Dispatched',
+  refer_attorney:"Referral to an Attorney / Public Attorney's Office (PAO)",
+};
+
+const CR_STATUS_LABELS = {
+  pending_review:'Pending Review', active:'Active', mediation_set:'Mediation Set',
+  resolved:'Resolved', closed:'Closed', transferred:'Transferred',
+  escalated:'Escalated', dismissed:'Dismissed', deliberation:'Under Deliberation',
+};
+
+function generateNarrative(b) {
+  const incDate   = crFmtDate(b.incident_date);
+  const filedDate = crFmtDate(b.created_at);
+  const type      = b.incident_type || 'the reported incident';
+  const comp      = b.complainant_name || 'the complainant';
+  const loc       = b.incident_location || 'an undisclosed location';
+  const levelMap  = { minor:'Minor', moderate:'Moderate', serious:'Serious', critical:'Critical' };
+  const lvl       = levelMap[b.violation_level] || (b.violation_level || '');
+  const status    = b.status || '';
+  const action    = b.prescribed_action || '';
+  const narr      = (b.narrative || '').trim();
+  const meds      = b.mediation_sessions || [];
+  const hasResp   = !!(b.respondent_name && b.respondent_name.trim());
+  const resp      = hasResp ? b.respondent_name : 'an unidentified party';
+  const bgyFull   = 'Barangay ' + BGY_INFO.name +
+    (BGY_INFO.municipality ? ', ' + BGY_INFO.municipality : '') +
+    (BGY_INFO.province     ? ', ' + BGY_INFO.province     : '');
+
+  let t = '';
+
+  // ¶1 – Case receipt
+  t += `On ${incDate}, a formal complaint was received and duly recorded at the office of ${bgyFull}. `;
+  t += `The complaint, classified under the category of ${type}`;
+  if (lvl) t += ` and assessed to be of ${lvl} violation level`;
+  t += `, was filed by ${comp}`;
+  if (b.complainant_contact) t += ` (contact number: ${b.complainant_contact})`;
+  t += `. The case was officially assigned Case Number ${b.case_number} and formally logged on ${filedDate}. `;
+  t += `The reported incident occurred at ${loc}.\n\n`;
+
+  // ¶2 – Complaint description and respondent
+  if (narr) {
+    const cn = narr.charAt(0).toUpperCase() + narr.slice(1);
+    t += `Based on the account presented by the complainant, ${cn.endsWith('.') ? cn : cn + '.'}`;
+  } else {
+    t += `The complainant presented a formal account of the incident before the Barangay, the details of which are contained in the official blotter entry for Case Number ${b.case_number}.`;
+  }
+  if (hasResp) {
+    t += ` The complaint was directed against ${resp}`;
+    if (b.respondent_contact) t += ` (contact number: ${b.respondent_contact})`;
+    t += `.`;
+  } else {
+    t += ` As of the date of this report, the respondent has not yet been formally identified. The Barangay reserves the right to update this record upon identification of the concerned party.`;
+  }
+  t += '\n\n';
+
+  // ¶3 – Action taken
+  t += `Upon receipt and review of the complaint, the Barangay undertook the necessary steps in accordance with the Katarungang Pambarangay Law (Chapter 7, Title I, Book III of Republic Act No. 7160, otherwise known as the Local Government Code of 1991). `;
+  if (action && CR_ACTION_LABELS[action]) {
+    t += `The prescribed course of action determined by the Barangay was: ${CR_ACTION_LABELS[action]}.`;
+  } else if (action) {
+    t += `The prescribed course of action determined by the Barangay was: ${action.replace(/_/g, ' ')}.`;
+  } else {
+    t += `The case was placed under active review and monitoring pending determination of the appropriate course of action.`;
+  }
+  if (b.remarks && b.remarks.trim()) {
+    t += ` Officer's additional remarks: "${b.remarks.trim()}".`;
+  }
+  t += '\n\n';
+
+  // ¶4 – Mediation (if any)
+  if (meds.length > 0) {
+    t += `Pursuant to the Katarungang Pambarangay process, mediation proceedings were formally initiated. `;
+    t += `A total of ${meds.length} mediation hearing${meds.length > 1 ? 's were' : ' was'} scheduled in connection with this case. `;
+    meds.forEach((m, i) => {
+      const md = crFmtDate(m.hearing_date), mt = m.hearing_time ? crFmtTime(m.hearing_time) : '';
+      const venue = m.venue || 'Barangay Hall';
+      t += `The ${crOrdinal(i + 1)} hearing was held on ${md}${mt ? ' at ' + mt : ''} at ${venue}`;
+      if (m.status === 'completed') {
+        const ca = m.complainant_attended == 1 ? 'present' : 'absent';
+        const ra = m.respondent_attended  == 1 ? 'present' : 'absent';
+        t += `, with the complainant ${ca} and the respondent ${ra}. `;
+        if (m.outcome && m.outcome.trim()) t += `The outcome of the session: ${m.outcome.trim()}. `;
+        else t += `The session was completed. `;
+      } else if (m.status === 'missed') {
+        t += `. This hearing was recorded as missed due to non-appearance of one or both parties. `;
+      } else if (m.status === 'scheduled') {
+        t += `. This hearing is currently scheduled and pending. `;
+      } else {
+        t += `. `;
+      }
+      if (m.next_steps && m.next_steps.trim()) t += `Next steps noted: ${m.next_steps.trim()}. `;
+    });
+    t += '\n\n';
+  }
+
+  // ¶5 – Resolution
+  const statusText = {
+    pending_review: 'currently pending review by the Barangay',
+    active: 'active and currently being processed by the Barangay',
+    mediation_set: 'scheduled for Barangay mediation proceedings',
+    resolved: 'resolved through the Barangay dispute resolution process',
+    closed: 'formally closed',
+    transferred: 'transferred to the appropriate authority for further proceedings',
+    escalated: 'escalated to a higher authority',
+    dismissed: 'dismissed by the Barangay',
+    deliberation: 'currently under Barangay deliberation',
+  };
+  const nowFmt = crFmtDate(new Date().toISOString());
+  t += `As of ${nowFmt}, Case Number ${b.case_number} is ${statusText[status] || status.replace(/_/g, ' ')}. `;
+  if (status === 'resolved') {
+    t += `The matter has been amicably settled between the parties, and the Barangay records reflect the resolution of the dispute. Appropriate documentation has been executed and placed on record.`;
+  } else if (status === 'transferred' || status === 'escalated') {
+    t += `The Barangay has forwarded all relevant documentation to the appropriate agency or authority for further proceedings. All parties have been duly notified of this action.`;
+  } else if (status === 'closed') {
+    t += `No further action is required at the Barangay level. All pertinent records have been duly archived.`;
+  } else if (status === 'dismissed') {
+    t += `The complaint was dismissed in accordance with Barangay procedures and applicable law. The parties were notified of the Barangay's decision.`;
+  } else {
+    t += `The Barangay shall continue to process and monitor this case in accordance with the applicable provisions of the Katarungang Pambarangay Law and other pertinent regulations.`;
+  }
+
+  return t;
+}
+
+function renderCaseReport(b) {
+  const med          = b.mediation_sessions || [];
+  const narrative    = generateNarrative(b);
+  const now          = new Date();
+  const dateGen      = now.toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' });
+  const timeGen      = now.toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit' });
+  const hasResp      = !!(b.respondent_name && b.respondent_name.trim());
+  const levelMap     = { minor:'Minor', moderate:'Moderate', serious:'Serious', critical:'Critical' };
+  const actionLabel  = CR_ACTION_LABELS[b.prescribed_action] || (b.prescribed_action ? b.prescribed_action.replace(/_/g,' ') : '—');
+  const statusLabel  = CR_STATUS_LABELS[b.status] || (b.status || '—').replace(/_/g,' ');
+
+  // Mediation table rows
+  let medRows = '';
+  if (med.length) {
+    med.forEach((m, i) => {
+      const ca = m.complainant_attended == 1 ? 'Present' : (m.complainant_attended == 0 ? 'Absent' : '—');
+      const ra = m.respondent_attended  == 1 ? 'Present' : (m.respondent_attended  == 0 ? 'Absent' : '—');
+      const ms = m.status ? m.status.charAt(0).toUpperCase() + m.status.slice(1) : '—';
+      medRows += `<tr style="border-bottom:1px solid #ddd">
+        <td style="padding:6px 10px;text-align:center">${i + 1}</td>
+        <td style="padding:6px 10px">${crFmtDate(m.hearing_date)}</td>
+        <td style="padding:6px 10px">${m.hearing_time ? crFmtTime(m.hearing_time) : '—'}</td>
+        <td style="padding:6px 10px">${crEsc(m.venue || 'Barangay Hall')}</td>
+        <td style="padding:6px 10px">${ms}</td>
+        <td style="padding:6px 10px;text-align:center">${ca}</td>
+        <td style="padding:6px 10px;text-align:center">${ra}</td>
+        <td style="padding:6px 10px">${crEsc(m.outcome || '—')}</td>
+      </tr>`;
+    });
+  } else {
+    medRows = `<tr><td colspan="8" style="padding:12px;text-align:center;color:#777;font-style:italic">No mediation sessions recorded for this case.</td></tr>`;
+  }
+
+  // Narrative paragraphs
+  const narrativeHtml = narrative.split('\n\n').filter(p => p.trim())
+    .map(p => `<p style="margin:0 0 14px 0;text-indent:40px;text-align:justify;line-height:1.8">${crEsc(p.trim()).replace(/\n/g,' ')}</p>`)
+    .join('');
+
+  const bgyFull = BGY_INFO.municipality
+    ? `Barangay ${crEsc(BGY_INFO.name)}, ${crEsc(BGY_INFO.municipality)}${BGY_INFO.province ? ', ' + crEsc(BGY_INFO.province) : ''}`
+    : `Barangay ${crEsc(BGY_INFO.name)}`;
+
+  document.getElementById('cr-document').innerHTML = `
+    <div style="font-family:'Times New Roman',Georgia,serif;color:#111;font-size:11.5pt;line-height:1.6">
+
+      <!-- Header -->
+      <div style="text-align:center;border-bottom:3px double #1F4068;padding-bottom:20px;margin-bottom:20px">
+        <div style="font-size:10pt;color:#555;letter-spacing:.1em;text-transform:uppercase">Republic of the Philippines</div>
+        <div style="font-size:10pt;color:#555;margin-bottom:2px">${BGY_INFO.municipality ? crEsc(BGY_INFO.municipality) : ''}${BGY_INFO.province ? ', ' + crEsc(BGY_INFO.province) : ''}</div>
+        <div style="font-size:11pt;font-weight:bold;color:#444;text-transform:uppercase;letter-spacing:.04em;margin-bottom:14px">Barangay ${crEsc(BGY_INFO.name)}</div>
+        <div style="width:60px;height:60px;border-radius:50%;border:2px solid #1F4068;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;background:#EDF5FB">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#1F4068" stroke-width="1.4" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="22" height="22" rx="2"/>
+            <path d="M7 9h14M7 14h14M7 19h9"/>
+          </svg>
+        </div>
+        <div style="font-size:19pt;font-weight:900;color:#0D1B2E;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Barangay Case Report</div>
+        <div style="font-size:10pt;color:#666;font-style:italic;margin-bottom:8px">Official Record — Katarungang Pambarangay</div>
+        <div style="font-size:10.5pt">Case No.: <strong style="font-size:13pt;color:#0D1B2E;letter-spacing:.06em">${crEsc(b.case_number)}</strong></div>
+      </div>
+
+      <!-- I. Case Information -->
+      <div style="margin-bottom:22px">
+        <div style="font-size:10.5pt;font-weight:bold;color:#0D1B2E;text-transform:uppercase;letter-spacing:.08em;border-bottom:1.5px solid #1F4068;padding-bottom:4px;margin-bottom:10px">I. Case Information</div>
+        <table style="width:100%;border-collapse:collapse">
+          <tr><td style="padding:4px 0;width:42%;color:#555;font-size:10.5pt">Blotter / Case Number:</td><td style="font-weight:bold;font-size:10.5pt">${crEsc(b.case_number)}</td></tr>
+          <tr><td style="padding:4px 0;color:#555;font-size:10.5pt">Date &amp; Time Filed:</td><td style="font-size:10.5pt">${crFmtDate(b.created_at)}</td></tr>
+          <tr><td style="padding:4px 0;color:#555;font-size:10.5pt">Date of Incident:</td><td style="font-size:10.5pt">${crFmtDate(b.incident_date)}${b.incident_time && b.incident_time !== '00:00:00' ? ' at ' + crFmtTime(b.incident_time) : ''}</td></tr>
+          <tr><td style="padding:4px 0;color:#555;font-size:10.5pt">Nature of Complaint:</td><td style="font-size:10.5pt">${crEsc(b.incident_type || '—')}</td></tr>
+          <tr><td style="padding:4px 0;color:#555;font-size:10.5pt">Violation Level:</td><td style="font-size:10.5pt">${levelMap[b.violation_level] || crEsc(b.violation_level || '—')}</td></tr>
+          <tr><td style="padding:4px 0;color:#555;font-size:10.5pt">Case Status:</td><td style="font-size:10.5pt;font-weight:bold">${statusLabel}</td></tr>
+          <tr><td style="padding:4px 0;color:#555;font-size:10.5pt">Prescribed Action:</td><td style="font-size:10.5pt">${crEsc(actionLabel)}</td></tr>
+          <tr><td style="padding:4px 0;color:#555;font-size:10.5pt">Location of Incident:</td><td style="font-size:10.5pt">${crEsc(b.incident_location || '—')}</td></tr>
+        </table>
+      </div>
+
+      <!-- II. Parties Involved -->
+      <div style="margin-bottom:22px">
+        <div style="font-size:10.5pt;font-weight:bold;color:#0D1B2E;text-transform:uppercase;letter-spacing:.08em;border-bottom:1.5px solid #1F4068;padding-bottom:4px;margin-bottom:10px">II. Parties Involved</div>
+        <table style="width:100%;border-collapse:collapse">
+          <tr>
+            <td style="vertical-align:top;width:50%;padding-right:16px;border-right:1px solid #e0e0e0">
+              <div style="font-size:9.5pt;font-weight:bold;color:#555;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Complainant</div>
+              <table style="width:100%;border-collapse:collapse">
+                <tr><td style="padding:3px 0;width:45%;color:#555;font-size:10.5pt">Full Name:</td><td style="font-size:10.5pt;font-weight:bold">${crEsc(b.complainant_name || '—')}</td></tr>
+                <tr><td style="padding:3px 0;color:#555;font-size:10.5pt">Contact No.:</td><td style="font-size:10.5pt">${crEsc(b.complainant_contact || '—')}</td></tr>
+              </table>
+            </td>
+            <td style="vertical-align:top;padding-left:16px">
+              <div style="font-size:9.5pt;font-weight:bold;color:#555;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Respondent</div>
+              <table style="width:100%;border-collapse:collapse">
+                <tr><td style="padding:3px 0;width:45%;color:#555;font-size:10.5pt">Full Name:</td><td style="font-size:10.5pt;font-weight:bold">${hasResp ? crEsc(b.respondent_name) : '<em style="color:#999;font-weight:normal">Not Identified</em>'}</td></tr>
+                <tr><td style="padding:3px 0;color:#555;font-size:10.5pt">Contact No.:</td><td style="font-size:10.5pt">${hasResp && b.respondent_contact ? crEsc(b.respondent_contact) : '—'}</td></tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- III. Incident Details -->
+      <div style="margin-bottom:22px">
+        <div style="font-size:10.5pt;font-weight:bold;color:#0D1B2E;text-transform:uppercase;letter-spacing:.08em;border-bottom:1.5px solid #1F4068;padding-bottom:4px;margin-bottom:10px">III. Incident Details</div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:10px">
+          <tr><td style="padding:4px 0;width:38%;color:#555;font-size:10.5pt">Date of Incident:</td><td style="font-size:10.5pt">${crFmtDate(b.incident_date)}</td></tr>
+          ${b.incident_time && b.incident_time !== '00:00:00' ? `<tr><td style="padding:4px 0;color:#555;font-size:10.5pt">Time of Incident:</td><td style="font-size:10.5pt">${crFmtTime(b.incident_time)}</td></tr>` : ''}
+          <tr><td style="padding:4px 0;color:#555;font-size:10.5pt">Location:</td><td style="font-size:10.5pt">${crEsc(b.incident_location || '—')}</td></tr>
+        </table>
+        <div style="font-size:10pt;color:#555;font-weight:bold;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Incident Description (as reported):</div>
+        <div style="font-size:10.5pt;line-height:1.75;background:#f7f8fa;padding:12px 16px;border-left:3px solid #1F4068;font-style:italic;color:#333">${crEsc(b.narrative || 'No description recorded.').replace(/\n/g,'<br>')}</div>
+      </div>
+
+      <!-- IV. Formal Case Narrative -->
+      <div style="margin-bottom:22px">
+        <div style="font-size:10.5pt;font-weight:bold;color:#0D1B2E;text-transform:uppercase;letter-spacing:.08em;border-bottom:1.5px solid #1F4068;padding-bottom:4px;margin-bottom:12px">IV. Formal Case Narrative</div>
+        <div style="font-size:10.5pt">${narrativeHtml}</div>
+      </div>
+
+      <!-- V. Actions Taken -->
+      <div style="margin-bottom:22px">
+        <div style="font-size:10.5pt;font-weight:bold;color:#0D1B2E;text-transform:uppercase;letter-spacing:.08em;border-bottom:1.5px solid #1F4068;padding-bottom:4px;margin-bottom:10px">V. Actions Taken</div>
+        <table style="width:100%;border-collapse:collapse">
+          <tr><td style="padding:4px 0;width:38%;color:#555;font-size:10.5pt">Prescribed Action:</td><td style="font-size:10.5pt;font-weight:bold">${crEsc(actionLabel)}</td></tr>
+          ${b.remarks && b.remarks.trim() ? `<tr><td style="padding:4px 0;color:#555;font-size:10.5pt;vertical-align:top">Officer's Remarks:</td><td style="font-size:10.5pt;text-align:justify">${crEsc(b.remarks)}</td></tr>` : ''}
+        </table>
+      </div>
+
+      <!-- VI. Mediation Proceedings -->
+      <div style="margin-bottom:22px">
+        <div style="font-size:10.5pt;font-weight:bold;color:#0D1B2E;text-transform:uppercase;letter-spacing:.08em;border-bottom:1.5px solid #1F4068;padding-bottom:4px;margin-bottom:10px">VI. Mediation Proceedings</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;border:1px solid #ccc;font-size:10pt">
+            <thead>
+              <tr style="background:#1F4068;color:white">
+                <th style="padding:7px 10px;text-align:center;white-space:nowrap">#</th>
+                <th style="padding:7px 10px;text-align:left;white-space:nowrap">Date</th>
+                <th style="padding:7px 10px;text-align:left;white-space:nowrap">Time</th>
+                <th style="padding:7px 10px;text-align:left">Venue</th>
+                <th style="padding:7px 10px;text-align:left">Status</th>
+                <th style="padding:7px 10px;text-align:center">Comp.</th>
+                <th style="padding:7px 10px;text-align:center">Resp.</th>
+                <th style="padding:7px 10px;text-align:left">Outcome / Notes</th>
+              </tr>
+            </thead>
+            <tbody>${medRows}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- VII. Resolution / Disposition -->
+      <div style="margin-bottom:22px">
+        <div style="font-size:10.5pt;font-weight:bold;color:#0D1B2E;text-transform:uppercase;letter-spacing:.08em;border-bottom:1.5px solid #1F4068;padding-bottom:4px;margin-bottom:10px">VII. Resolution / Disposition</div>
+        <table style="width:100%;border-collapse:collapse">
+          <tr><td style="padding:4px 0;width:38%;color:#555;font-size:10.5pt">Final Case Status:</td><td style="font-size:10.5pt;font-weight:bold">${statusLabel}</td></tr>
+          <tr><td style="padding:4px 0;color:#555;font-size:10.5pt">Final Action:</td><td style="font-size:10.5pt">${crEsc(actionLabel)}</td></tr>
+          <tr><td style="padding:4px 0;color:#555;font-size:10.5pt">Last Updated:</td><td style="font-size:10.5pt">${crFmtDate(b.updated_at || b.created_at)}</td></tr>
+        </table>
+      </div>
+
+      <!-- VIII. Certification -->
+      <div style="margin-bottom:10px">
+        <div style="font-size:10.5pt;font-weight:bold;color:#0D1B2E;text-transform:uppercase;letter-spacing:.08em;border-bottom:1.5px solid #1F4068;padding-bottom:4px;margin-bottom:14px">VIII. Certification</div>
+        <p style="font-size:10.5pt;text-align:justify;line-height:1.8;margin-bottom:0">
+          I hereby certify that the foregoing is a true and accurate record of the blotter case filed before ${bgyFull}, and that all information contained herein has been duly recorded and verified in accordance with the procedures of the Katarungang Pambarangay and applicable laws of the Republic of the Philippines.
+        </p>
+        <div style="display:flex;justify-content:space-between;margin-top:44px;gap:24px">
+          <div style="flex:1;text-align:center">
+            <div style="border-top:1.5px solid #111;padding-top:6px;margin-top:0">
+              <div style="font-size:10.5pt;font-weight:bold;text-transform:uppercase">${crEsc(CURRENT_OFFICER)}</div>
+              <div style="font-size:9.5pt;color:#555">Prepared by / Recording Officer</div>
+            </div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div style="border-top:1.5px solid #111;padding-top:6px;margin-top:0">
+              <div style="font-size:10.5pt;font-weight:bold;text-transform:uppercase">${BGY_INFO.captain_name ? crEsc(BGY_INFO.captain_name) : '____________________________'}</div>
+              <div style="font-size:9.5pt;color:#555">Barangay Captain</div>
+            </div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div style="border-top:1.5px solid #111;padding-top:6px;margin-top:0">
+              <div style="font-size:10.5pt;font-weight:bold">____________________________</div>
+              <div style="font-size:9.5pt;color:#555">Barangay Secretary</div>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:20px;font-size:9pt;color:#888;border-top:1px dashed #ccc;padding-top:8px">
+          Report generated on ${dateGen} at ${timeGen} &nbsp;·&nbsp; VOICE Barangay Management System
+        </div>
+      </div>
+
+    </div>
+  `;
+
+  document.getElementById('cr-loading').style.display = 'none';
+  document.getElementById('cr-document').style.display = 'block';
+}
+
+function printCaseReport() {
+  const b = window._currentBlotter;
+  if (!b) return;
+  const doc = document.getElementById('cr-document');
+  if (!doc || doc.style.display === 'none') {
+    showToast('Please wait for the report to load first.', 'error');
+    return;
+  }
+  const w = window.open('', '_blank', 'width=950,height=800');
+  if (!w) { showToast('Allow pop-ups to print the report.', 'error'); return; }
+  w.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Case Report — ${b.case_number}</title>
+  <style>
+    @page { size: A4; margin: 18mm 22mm; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Times New Roman', Georgia, serif; font-size: 11.5pt; color: #111; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    p { margin-bottom: 14pt; }
+    table { border-collapse: collapse; width: 100%; }
+    thead { background: #1F4068 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @media print { body { margin: 0; } }
+  </style>
+</head>
+<body>${doc.innerHTML}</body>
+</html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => { w.print(); }, 600);
+}
+
+function exportCaseReportPDF() {
+  printCaseReport();
+}
+
+// ─── Auto-status preview ──────────────────────────────────────────────────────
 
 // Show auto-status preview when action dropdown changes
 function previewAutoStatus(action) {
