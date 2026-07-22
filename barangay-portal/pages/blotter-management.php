@@ -6,31 +6,6 @@ $f_status = $_GET['status'] ?? '';
 $f_level  = $_GET['level']  ?? '';
 $f_type   = $_GET['type']   ?? '';
 $f_search = $_GET['search'] ?? '';
-$pg       = max(1, (int)($_GET['pg'] ?? 1));
-$per_page = 15;
-$offset   = ($pg - 1) * $per_page;
-
-$where = ["barangay_id = $bid"]; $params = [];
-if ($f_status) { $where[] = 'status = ?';          $params[] = $f_status; }
-if ($f_level)  { $where[] = 'violation_level = ?'; $params[] = $f_level; }
-if ($f_type)   { $where[] = 'incident_type = ?';   $params[] = $f_type; }
-if ($f_search) {
-    $where[] = '(case_number LIKE ? OR complainant_name LIKE ? OR respondent_name LIKE ?)';
-    $like = "%{$f_search}%";
-    $params = array_merge($params, [$like, $like, $like]);
-}
-$ws = 'WHERE ' . implode(' AND ', $where);
-
-$blotters = []; $total = 0;
-try {
-    $c = $pdo->prepare("SELECT COUNT(*) FROM blotters $ws");
-    $c->execute($params); $total = (int)$c->fetchColumn();
-    $s = $pdo->prepare("SELECT * FROM blotters $ws ORDER BY created_at DESC LIMIT ? OFFSET ?");
-    $s->execute(array_merge($params, [$per_page, $offset]));
-    $blotters = $s->fetchAll();
-} catch (PDOException $e) {}
-
-$total_pages = max(1, (int)ceil($total / $per_page));
 
 $tab_counts = [];
 try {
@@ -61,13 +36,13 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
 </div>
 
 <!-- Status tabs -->
-<div class="tab-bar" style="margin-bottom:0;border-bottom:none">
+<div class="tab-bar" style="margin-bottom:0;border-bottom:none" data-lf-group>
   <?php
   $tabs = [''=>'All','pending_review'=>'Pending','active'=>'Active','mediation_set'=>'Mediation Set','resolved'=>'Resolved','deliberation'=>'Deliberation','transferred'=>'Transferred','closed'=>'Closed','escalated'=>'Escalated'];
   foreach ($tabs as $val => $lbl):
     $cnt = $val === '' ? ($tab_counts['all']??0) : ($tab_counts[$val]??0);
   ?>
-  <a class="tab-item <?= $f_status===$val?'active':'' ?>" href="<?= bq(['status'=>$val,'pg'=>1]) ?>">
+  <a class="tab-item <?= $f_status===$val?'active':'' ?>" data-lf href="<?= bq(['status'=>$val,'pg'=>1]) ?>">
     <?= $lbl ?><?php if ($cnt): ?> <span style="font-size:10px;background:var(--surface-2);padding:0 6px;border-radius:10px;margin-left:3px"><?= $cnt ?></span><?php endif; ?>
   </a>
   <?php endforeach; ?>
@@ -75,79 +50,30 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
 <div style="height:1px;background:var(--ink-100);margin-bottom:14px"></div>
 
 <!-- Filter bar -->
-<form method="GET" class="filter-bar">
+<form id="bm-form" class="filter-bar" onsubmit="return false">
   <input type="hidden" name="page" value="blotter-management">
-  <?php if ($f_status): ?><input type="hidden" name="status" value="<?= e($f_status) ?>"><?php endif; ?>
+  <input type="hidden" name="status" value="<?= e($f_status) ?>">
   <div class="inp-icon" style="flex:1;max-width:260px">
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="6" cy="6" r="4"/><path d="M11 11l-2.5-2.5"/></svg>
     <input type="search" name="search" placeholder="Case no., name…" value="<?= e($f_search) ?>">
   </div>
-  <select name="level" onchange="this.form.submit()">
+  <select name="level">
     <option value="">All Levels</option>
     <?php foreach (['minor','moderate','serious','critical'] as $l): ?>
       <option value="<?= $l ?>" <?= $f_level===$l?'selected':'' ?>><?= ucfirst($l) ?></option>
     <?php endforeach; ?>
   </select>
-  <select name="type" onchange="this.form.submit()">
+  <select name="type">
     <option value="">All Types</option>
     <?php foreach ($inc_types as $t): ?>
       <option value="<?= $t ?>" <?= $f_type===$t?'selected':'' ?>><?= $t ?></option>
     <?php endforeach; ?>
   </select>
-  <button type="submit" class="btn btn-outline btn-sm">Search</button>
-  <a href="?page=blotter-management" class="btn btn-ghost btn-sm">Clear</a>
+  <button type="button" id="bm-clear" class="btn btn-ghost btn-sm">✕ Clear</button>
 </form>
 
-<div class="card">
-  <div class="tbl-wrap">
-    <table>
-      <thead>
-        <tr><th>Case No.</th><th>Complainant</th><th>Respondent</th><th>Type</th><th>Level</th><th>Status</th><th>Prescribed Action</th><th>Filed</th><th>Actions</th></tr>
-      </thead>
-      <tbody>
-      <?php if (empty($blotters)): ?>
-        <tr><td colspan="9"><div class="empty-state"><div class="es-icon">📋</div><div class="es-title">No blotters found</div><div class="es-sub">Adjust your filters or file a new blotter</div></div></td></tr>
-      <?php else: foreach ($blotters as $b):
-        $has_respondent = !empty(trim($b['respondent_name'] ?? ''));
-        $is_terminal    = in_array($b['status'], ['resolved','closed','transferred']);
-      ?>
-        <tr>
-          <td class="td-mono"><?= e($b['case_number']) ?></td>
-          <td class="td-main"><?= e($b['complainant_name']) ?></td>
-          <td><?= $has_respondent ? e($b['respondent_name']) : '<span style="color:var(--ink-300);font-style:italic;font-size:11px">No respondent</span>' ?></td>
-          <td style="font-size:12px"><?= e($b['incident_type']) ?></td>
-          <td><span class="chip <?= $lm[$b['violation_level']]??'ch-slate' ?>"><?= ucfirst($b['violation_level']) ?></span></td>
-          <td><span class="chip <?= $sm[$b['status']]??'ch-slate' ?>"><?= ucwords(str_replace('_',' ',$b['status'])) ?></span></td>
-          <td style="font-size:12px;color:var(--ink-500)"><?= e(ucwords(str_replace('_',' ',$b['prescribed_action']??''))) ?: '—' ?></td>
-          <td style="font-size:12px;color:var(--ink-400)"><?= date('M j, Y', strtotime($b['created_at'])) ?></td>
-          <td>
-            <div style="display:flex;gap:4px">
-              <button class="act-btn" onclick="viewBlotter(<?= $b['id'] ?>)">View</button>
-              <?php if ($b['status']==='pending_review'): ?>
-                <button class="act-btn green" onclick="quickApprove(<?= $b['id'] ?>)">Approve</button>
-              <?php endif; ?>
-              <?php if (!$is_terminal && $has_respondent): ?>
-                <button class="act-btn" onclick="openScheduleMed(<?= $b['id'] ?>,'<?= e(addslashes($b['case_number'])) ?>')">Mediation</button>
-              <?php endif; ?>
-            </div>
-          </td>
-        </tr>
-      <?php endforeach; endif; ?>
-      </tbody>
-    </table>
-  </div>
-  <div class="card-foot">
-    <div class="pager">
-      <span class="pager-info">Showing <?= min($offset+1,$total) ?>–<?= min($offset+$per_page,$total) ?> of <?= $total ?> records</span>
-      <div class="pager-btns">
-        <?php if ($pg>1): ?><a href="<?= bq(['pg'=>$pg-1]) ?>" class="btn btn-outline btn-sm">← Prev</a><?php endif; ?>
-        <?php for ($i=max(1,$pg-2);$i<=min($total_pages,$pg+2);$i++): ?>
-          <a href="<?= bq(['pg'=>$i]) ?>" class="btn <?= $i===$pg?'btn-primary':'btn-outline' ?> btn-sm"><?= $i ?></a>
-        <?php endfor; ?>
-        <?php if ($pg<$total_pages): ?><a href="<?= bq(['pg'=>$pg+1]) ?>" class="btn btn-outline btn-sm">Next →</a><?php endif; ?>
-      </div>
-    </div>
-  </div>
+<div id="bm-results">
+  <?php require __DIR__ . '/partials/blotter-table.php'; ?>
 </div>
 
 <!-- ══ Case Report Modal ══ -->
@@ -330,11 +256,21 @@ function submitSchedule() {
 
 // ─── Export CSV ───────────────────────────────────────────────────────────────
 function exportCSV() {
-  window.location = 'ajax/export_blotters.php?' + new URLSearchParams({
-    barangay_id: BARANGAY_ID,
-    status:'<?= e($f_status) ?>', level:'<?= e($f_level) ?>', search:'<?= e($f_search) ?>'
-  });
+  const form = document.getElementById('bm-form');
+  const params = new URLSearchParams(new FormData(form));
+  params.set('barangay_id', BARANGAY_ID);
+  showExportPreview('ajax/export_blotters.php?' + params.toString(), 'Blotter Export');
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+  liveFilter({
+    form: '#bm-form',
+    result: '#bm-results',
+    endpoint: 'ajax/blotter_search.php',
+    clearBtn: '#bm-clear',
+    resetOverrides: { status: '' },
+  });
+});
 
 // ─── renderPanel — overrides index.php version with full feature set ──────────
 function renderPanel(b) {
@@ -414,16 +350,15 @@ function renderPanel(b) {
 
   // ── Attachments ──
   const attachHtml = (b.attachments&&b.attachments.length>0) ? `
-    <div class="card mb16">
-      <div class="card-hdr"><span class="card-title">📎 Attachments (${b.attachments.length})</span></div>
+    <div class="card mb16 case-view-readonly">
+      <div class="card-hdr"><span class="card-title">Attachments (${b.attachments.length})</span></div>
       <div class="card-body" style="padding:12px 16px">
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px">
+        <div class="case-view-attachments">
           ${b.attachments.map(att=>{
             const p='../'+att.file_path;
-            return `<div onclick="viewAttachment('${p}','${att.original_name}')"
-                         style="border-radius:var(--r-md);overflow:hidden;border:1px solid var(--ink-100);cursor:pointer">
-              <img src="${p}" alt="${att.original_name}" style="width:100%;height:88px;object-fit:cover;display:block" onerror="this.style.opacity='.3'">
-              <div style="font-size:10px;color:var(--ink-500);padding:3px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--surface-2)">${att.original_name}</div>
+            return `<div onclick="viewAttachment('${p}','${att.original_name}')" class="case-view-attachment">
+              <img src="${p}" alt="${att.original_name}" onerror="this.style.opacity='.3'">
+              <div class="case-view-attachment-name">${att.original_name}</div>
             </div>`;
           }).join('')}
         </div>
@@ -432,17 +367,16 @@ function renderPanel(b) {
 
   // ── No-respondent notice ──
   const noRespNote = !hasRespondent ? `
-    <div style="background:var(--amber-50,#fffbeb);border:1px solid var(--amber-200,#fde68a);
-                border-radius:var(--r-md);padding:10px 14px;font-size:12px;color:var(--amber-700);margin-bottom:12px">
+    <div class="case-view-note">
       ℹ️ <strong>No respondent identified.</strong>
       Mediation is unavailable — the case can still be documented, referred, or escalated.
     </div>` : '';
 
   // ── Quick action buttons (context-aware) ──
   const quickBtns = !isTerminal ? `
-    <div style="margin-bottom:16px">
+    <div class="case-view-actions">
       <div class="panel-section-lbl">Quick Actions</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <div class="case-view-action-row">
         ${b.status!=='resolved'   ? `<button class="btn btn-outline btn-sm" onclick="quickAction(${b.id},'resolved','no_action_needed','Marked resolved')">✅ Resolve</button>` : ''}
         ${b.status==='resolved'   ? `<button class="btn btn-outline btn-sm" onclick="quickAction(${b.id},'active','','Reopened')">🔄 Reopen</button>` : ''}
         ${b.status!=='closed'     ? `<button class="btn btn-outline btn-sm" onclick="quickAction(${b.id},'closed','','Case closed')">🔒 Close</button>` : ''}
@@ -471,15 +405,15 @@ function renderPanel(b) {
   window._currentBlotter = b;
 
   document.getElementById('panel-body').innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+    <div class="case-view-top">
       ${levelChip(b.violation_level)} ${statusChip(b.status)}
-      <button class="btn btn-outline btn-sm" style="margin-left:auto;border-color:var(--navy-200);color:var(--navy-700)" onclick="openCaseReport()">📄 Case Report</button>
+      <button class="btn btn-outline btn-sm case-view-push" style="border-color:var(--navy-200);color:var(--navy-700)" onclick="openCaseReport()">Case Report</button>
     </div>
 
     ${noRespNote}
     ${quickBtns}
 
-    <div class="card mb16">
+    <div class="card mb16 case-view-card">
       <div class="card-hdr"><span class="card-title">Case Information</span></div>
       <div class="card-body" style="padding:12px 16px">
         <div class="dr"><span class="dr-lbl">Complainant</span>   <span class="dr-val">${b.complainant_name||'—'}</span></div>
@@ -492,16 +426,16 @@ function renderPanel(b) {
       </div>
     </div>
 
-    <div class="card mb16">
+    <div class="card mb16 case-view-readonly">
       <div class="card-hdr"><span class="card-title">Narrative</span></div>
       <div class="card-body" style="padding:12px 16px">
-        <p style="font-size:13px;color:var(--ink-700);line-height:1.75;white-space:pre-wrap">${b.narrative||'No narrative recorded.'}</p>
+        <p class="case-view-text">${b.narrative||'No narrative recorded.'}</p>
       </div>
     </div>
 
     ${attachHtml}
 
-    <div class="card mb16">
+    <div class="card mb16 case-view-edit">
       <div class="card-hdr"><span class="card-title">Update Case</span></div>
       <div class="card-body" style="padding:12px 16px">
 

@@ -7,7 +7,7 @@ $kpi = ['filed'=>0,'active'=>0,'as_violator'=>0,'pending_med'=>0];
 try {
     $kpi['filed']       = (int)$pdo->query("SELECT COUNT(*) FROM blotters WHERE complainant_user_id=$uid")->fetchColumn();
     $kpi['active']      = (int)$pdo->query("SELECT COUNT(*) FROM blotters WHERE complainant_user_id=$uid AND status NOT IN ('resolved','closed','transferred')")->fetchColumn();
-    $kpi['as_violator'] = (int)$pdo->query("SELECT COUNT(*) FROM violations WHERE user_id=$uid")->fetchColumn();
+    $kpi['as_violator'] = (int)$pdo->query("SELECT COUNT(*) FROM blotters WHERE respondent_user_id=$uid")->fetchColumn();
     $kpi['pending_med'] = (int)$pdo->query("SELECT COUNT(*) FROM mediation_schedules ms JOIN blotters b ON b.id=ms.blotter_id WHERE b.complainant_user_id=$uid AND ms.status='scheduled' AND ms.hearing_date>=CURDATE()")->fetchColumn();
 } catch (PDOException $e) {}
 
@@ -21,12 +21,6 @@ try {
 $hearings = [];
 try {
     $hearings = $pdo->query("SELECT ms.hearing_date,ms.hearing_time,ms.venue,b.case_number FROM mediation_schedules ms JOIN blotters b ON b.id=ms.blotter_id WHERE b.complainant_user_id=$uid AND ms.status='scheduled' AND ms.hearing_date>=CURDATE() ORDER BY ms.hearing_date ASC LIMIT 3")->fetchAll();
-} catch (PDOException $e) {}
-
-// Unread notices
-$notices_count = 0;
-try {
-    $notices_count = (int)$pdo->query("SELECT COUNT(*) FROM notices WHERE recipient_user_id=$uid AND acknowledged_at IS NULL")->fetchColumn();
 } catch (PDOException $e) {}
 
 // Active penalties - UPDATED to include p.community_hours
@@ -48,16 +42,6 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
     <a href="?page=file-report" class="btn btn-primary">+ File a Report</a>
   </div>
 </div>
-
-<?php if ($notices_count > 0): ?>
-<div class="alert alert-amber mb16">
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--amber-600)" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11.5" r=".5" fill="currentColor"/></svg>
-  <div class="alert-text">
-    <strong>You have <?= $notices_count ?> unread notice(s) from your barangay</strong>
-    <span><a href="?page=notices" style="color:var(--amber-600);font-weight:600">View notices →</a></span>
-  </div>
-</div>
-<?php endif; ?>
 
 <div class="kpi-grid">
   <div class="kpi-card kc-green">
@@ -97,7 +81,7 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
             <td><span class="chip <?= $lm[$b['violation_level']]??'ch-slate' ?>"><?= ucfirst($b['violation_level']) ?></span></td>
             <td><span class="chip <?= $sm[$b['status']]??'ch-slate' ?>"><?= ucwords(str_replace('_',' ',$b['status'])) ?></span></td>
             <td style="font-size:12px;color:var(--ink-400)"><?= date('M j', strtotime($b['created_at'])) ?></td>
-            <td><button class="act-btn" onclick="viewBlotter(<?= $b['id'] ?>)">View</button></td>
+            <td><button class="act-btn" onclick="viewBlotter(<?= $b['id'] ?>)">View Case</button></td>
           </tr>
         <?php endforeach; endif; ?>
         </tbody>
@@ -125,7 +109,7 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
 
     <?php if (!empty($penalties)): ?>
     <div class="card mb16">
-      <div class="card-hdr"><div class="card-title">⚖️ Active Sanctions</div><a href="?page=notices" class="act-btn">All</a></div>
+      <div class="card-hdr"><div class="card-title">⚖️ Active Sanctions</div><a href="?page=sanctions" class="act-btn">All</a></div>
       <div class="card-body" style="padding:0 18px">
         <?php foreach ($penalties as $pen):
           $pc = ['pending'=>'ch-amber','paid'=>'ch-green','overdue'=>'ch-rose','waived'=>'ch-slate'][$pen['status']]??'ch-slate';
@@ -175,7 +159,7 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
         <a href="?page=file-report" class="btn btn-primary" style="justify-content:flex-start">📝 File a New Report</a>
         <a href="?page=my-blotters" class="btn btn-outline" style="justify-content:flex-start">📋 View My Blotters</a>
         <a href="?page=assigned-cases" class="btn btn-outline" style="justify-content:flex-start">⚠️ Cases Against Me</a>
-        <a href="?page=notices" class="btn btn-outline" style="justify-content:flex-start">🔔 Notices & Sanctions</a>
+        <a href="?page=sanctions" class="btn btn-outline" style="justify-content:flex-start">Sanctions &amp; Penalties</a>
       </div>
     </div>
   </div>

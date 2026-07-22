@@ -37,9 +37,9 @@ function guardRole($allowed_roles): void {
         http_response_code(403);
         // Optionally redirect to their correct portal instead of showing 403
         switch ($role) {
-            case 'community':  redirect('../community-portal/index.html'); break;
-            case 'barangay':   redirect('../barangay-portal/index.html');  break;
-            case 'superadmin': redirect('../superadmin-portal/index.html'); break;
+            case 'community':  redirect('../community-portal/index.php'); break;
+            case 'barangay':   redirect('../barangay-portal/index.php');  break;
+            case 'superadmin': redirect('../superadmin-portal/index.php'); break;
             default: die('403 — Access Denied');
         }
     }

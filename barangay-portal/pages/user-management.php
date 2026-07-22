@@ -91,6 +91,7 @@ $av_palette = ['#0D7377','#047857','#6D28D9','#1F4068','#B45309','#BE123C','#036
   </div>
 </div>
 
+<div id="um-live-region">
 <!-- STAT CARDS -->
 <div class="um-stat-row">
   <div class="um-stat <?= $filter_status==='all'&&!$search?'um-stat-hl':'' ?>" onclick="setStatusFilter('all')" style="cursor:pointer">
@@ -256,6 +257,7 @@ $av_palette = ['#0D7377','#047857','#6D28D9','#1F4068','#B45309','#BE123C','#036
     </div>
   </div>
   <?php endif; ?>
+</div>
 </div>
 
 <!-- ════════ USER DETAIL PANEL ════════ -->
@@ -426,6 +428,12 @@ var pdUser  = null;  // currently loaded user object
 
 // ── Delegated click handlers for table buttons ───
 document.addEventListener('click', function(e) {
+  var pagerLink = e.target.closest('.pager-btns a[href*="page=user-management"]');
+  if (pagerLink) {
+    e.preventDefault();
+    umLoadUrl(pagerLink.href, true);
+    return;
+  }
   var viewBtn = e.target.closest('.um-view-btn');
   if (viewBtn) {
     var raw = viewBtn.getAttribute('data-user');
@@ -445,19 +453,61 @@ document.addEventListener('click', function(e) {
 
 // ── Filters ───────────────────────────────────────
 var umST = null;
+var umAbort = null;
 function umSearchDebounce(){ clearTimeout(umST); umST = setTimeout(umApplyFilters, 380); }
-function umApplyFilters(){
+function umBuildUrl(pageNum){
   var q = document.getElementById('um-search').value.trim();
   var s = document.getElementById('um-status').value;
   var o = document.getElementById('um-sort').value;
-  var u = '?page=user-management';
-  if (q) u += '&q=' + encodeURIComponent(q);
-  if (s !== 'all')    u += '&status=' + encodeURIComponent(s);
-  if (o !== 'newest') u += '&sort='   + encodeURIComponent(o);
-  window.location.href = u;
+  var p = new URLSearchParams();
+  p.set('page', 'user-management');
+  if (pageNum && pageNum > 1) p.set('p', pageNum);
+  if (q) p.set('q', q);
+  if (s !== 'all') p.set('status', s);
+  if (o !== 'newest') p.set('sort', o);
+  return '?' + p.toString();
+}
+function umLoadUrl(url, pushState){
+  var region = document.getElementById('um-live-region');
+  if (!region) {
+    window.location.href = url;
+    return;
+  }
+  if (umAbort) umAbort.abort();
+  umAbort = new AbortController();
+  fetch(url, {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    signal: umAbort.signal
+  })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(function(html) {
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var next = doc.getElementById('um-live-region');
+      if (!next) {
+        window.location.href = url;
+        return;
+      }
+      region.replaceWith(next);
+      if (pushState) history.pushState(null, '', url);
+    })
+    .catch(function(err) {
+      if (err.name === 'AbortError') return;
+      showToast('Search failed. Please try again.', 'error');
+    });
+}
+function umApplyFilters(){
+  umLoadUrl(umBuildUrl(1), true);
 }
 function setStatusFilter(v){ document.getElementById('um-status').value = v; umApplyFilters(); }
 function umClearSearch(){ document.getElementById('um-search').value = ''; umApplyFilters(); }
+window.addEventListener('popstate', function(){
+  if ((location.search || '').indexOf('page=user-management') !== -1) {
+    umLoadUrl(location.href, false);
+  }
+});
 
 // ── Panel open/close ──────────────────────────────
 function openUserPanelShell(id){ document.getElementById(id).classList.add('open'); document.body.style.overflow = 'hidden'; }
@@ -585,7 +635,7 @@ function renderInfoRows(u) {
   rows.forEach(function(r) {
     html += '<div class="dr" style="padding:9px 14px;border-bottom:1px solid var(--ink-100)">'
           + '<span class="dr-lbl" style="font-size:12px">'+r[0]+'</span>'
-          + '<span class="dr-val" style="font-size:12px;max-width:62%;text-align:right;word-break:break-word">'+r[1]+'</span>'
+          + '<span class="dr-val" style="font-size:12px;word-break:break-word">'+r[1]+'</span>'
           + '</div>';
   });
   document.getElementById('pd-info-body').innerHTML = html;

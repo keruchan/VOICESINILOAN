@@ -41,7 +41,7 @@ $sm=['resolved'=>'ch-green','closed'=>'ch-slate','transferred'=>'ch-navy'];
           <td><span class="chip <?= $sm[$b['status']]??'ch-slate' ?>"><?= ucfirst($b['status']) ?></span></td>
           <td style="font-size:12px;color:var(--ink-400);max-width:180px;white-space:normal"><?= e(mb_strimwidth($b['med_outcome']??'—',0,60,'…')) ?></td>
           <td style="font-size:12px;color:var(--ink-400)"><?= date('M j, Y',strtotime($b['updated_at'])) ?></td>
-          <td><button class="act-btn" onclick="viewBlotter(<?= $b['id'] ?>)">View</button></td>
+          <td><button class="act-btn" onclick="viewBlotter(<?= $b['id'] ?>)">View Case</button></td>
         </tr>
       <?php endforeach; ?>
       </tbody>

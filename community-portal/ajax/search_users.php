@@ -43,5 +43,5 @@ try {
     ]);
 } catch (PDOException $e) {
     error_log('search_users.php: ' . $e->getMessage());
-    echo json_encode(['success' => false, 'results' => [], 'debug' => $e->getMessage()]);
+    echo json_encode(['success' => false, 'results' => []]);
 }

@@ -1,0 +1,6 @@
+# SMTP credentials — never commit real mailbox passwords.
+connection/mail_config.php
+
+# Local logs
+*.log
+**/php-errors.log

@@ -9,35 +9,13 @@ $name_parts = array_filter(preg_split('/[\s,]+/', $uname), fn($p) => strlen($p) 
 $name_likes = implode(' AND ', array_map(fn($p) => "b.respondent_name LIKE '%" . addslashes($p) . "%'", $name_parts));
 $name_likes_plain = $name_likes ?: "1=0"; // safe fallback
 
-// ── Notifications (all — both complainant and respondent roles) ─
-$notifications = [];
-try {
-    $stmt = $pdo->prepare("
-        SELECT
-            pn.id, pn.blotter_id, pn.notification_type, pn.recipient_type,
-            pn.subject, pn.message, pn.channel, pn.status,
-            pn.sent_at, pn.read_at, pn.created_at,
-            b.case_number, b.incident_type, b.violation_level,
-            b.status AS blotter_status, b.complainant_name, b.respondent_name,
-            ms.hearing_date, ms.hearing_time, ms.venue
-        FROM party_notifications pn
-        LEFT JOIN blotters b             ON b.id  = pn.blotter_id
-        LEFT JOIN mediation_schedules ms ON ms.id = pn.mediation_schedule_id
-        WHERE pn.recipient_user_id = ?
-        ORDER BY pn.created_at DESC
-    ");
-    $stmt->execute([$uid]);
-    $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {}
-
 // ── Formal Penalties — as RESPONDENT ─────────────────────────
-// Must match via: respondent_user_id (direct link) OR name match (walk-in)
 $penalties_as_respondent = [];
 try {
     $penalties_as_respondent = $pdo->query("
         SELECT p.id, p.reason, p.amount, p.community_hours, p.due_date,
                p.status AS penalty_status, p.missed_party, p.created_at,
-               b.case_number, b.incident_type, b.complainant_name,
+               b.id AS blotter_id, b.case_number, b.incident_type, b.complainant_name,
                b.complainant_missed, b.respondent_missed
         FROM penalties p
         JOIN blotters b ON b.id = p.blotter_id
@@ -54,7 +32,7 @@ try {
     $penalties_as_complainant = $pdo->query("
         SELECT p.id, p.reason, p.amount, p.community_hours, p.due_date,
                p.status AS penalty_status, p.missed_party, p.created_at,
-               b.case_number, b.incident_type, b.respondent_name,
+               b.id AS blotter_id, b.case_number, b.incident_type, b.respondent_name,
                b.complainant_missed, b.respondent_missed
         FROM penalties p
         JOIN blotters b ON b.id = p.blotter_id
@@ -68,7 +46,7 @@ try {
 // ── Event-derived sanctions ───────────────────────────────────
 $event_sanctions = [];
 try {
-    // 1. Missed hearings — as RESPONDENT (use no_show_by or missed_session + name/uid match)
+    // 1. Missed hearings — as RESPONDENT
     $ev = $pdo->query("
         SELECT ms.id AS med_id, ms.hearing_date, ms.hearing_time, ms.venue,
                ms.status, ms.no_show_by, ms.missed_session, ms.action_type,
@@ -105,7 +83,6 @@ try {
     foreach ($ev as $row) $event_sanctions[] = $row;
 
     // 3. Cases referred/escalated — as RESPONDENT
-    // Match: respondent_user_id OR name match; action is refer_police/vawc/escalate OR status=escalated
     $ev = $pdo->query("
         SELECT b.id AS blotter_id, b.case_number, b.incident_type,
                b.prescribed_action, b.status AS blotter_status,
@@ -123,7 +100,7 @@ try {
     ")->fetchAll(PDO::FETCH_ASSOC);
     foreach ($ev as $row) $event_sanctions[] = $row;
 
-    // 4. Cases referred/escalated — as COMPLAINANT (informational — good news, their case moved forward)
+    // 4. Cases referred/escalated — as COMPLAINANT
     $ev = $pdo->query("
         SELECT b.id AS blotter_id, b.case_number, b.incident_type,
                b.prescribed_action, b.status AS blotter_status,
@@ -141,7 +118,7 @@ try {
     ")->fetchAll(PDO::FETCH_ASSOC);
     foreach ($ev as $row) $event_sanctions[] = $row;
 
-    // 5. Dismissed cases — as COMPLAINANT (status = 'dismissed', not prescribed_action)
+    // 5. Dismissed cases — as COMPLAINANT
     $ev = $pdo->query("
         SELECT b.id AS blotter_id, b.case_number, b.incident_type,
                b.prescribed_action, b.status AS blotter_status,
@@ -156,7 +133,7 @@ try {
     ")->fetchAll(PDO::FETCH_ASSOC);
     foreach ($ev as $row) $event_sanctions[] = $row;
 
-    // 6. Dismissed cases — as RESPONDENT (good news: case dropped against them)
+    // 6. Dismissed cases — as RESPONDENT
     $ev = $pdo->query("
         SELECT b.id AS blotter_id, b.case_number, b.incident_type,
                b.prescribed_action, b.status AS blotter_status,
@@ -175,1182 +152,396 @@ try {
     error_log('notices.php event_sanctions: ' . $e->getMessage());
 }
 
-// ── Mark unread as read ───────────────────────────────────────
-try {
-    $pdo->prepare("
-        UPDATE party_notifications
-        SET status = 'read', read_at = NOW()
-        WHERE recipient_user_id = ? AND status != 'read'
-    ")->execute([$uid]);
-} catch (PDOException $e) {}
+$penalty_chip = ['pending'=>'ch-amber','paid'=>'ch-emerald','waived'=>'ch-slate','overdue'=>'ch-rose'];
 
-// ── Notification type config ──────────────────────────────────
-$notif_config = [
-    'hearing_scheduled'   => ['ch-teal',    '📅', 'Hearing Scheduled'],
-    'hearing_reminder'    => ['ch-teal',    '🔔', 'Hearing Reminder'],
-    'hearing_rescheduled' => ['ch-amber',   '📅', 'Hearing Rescheduled'],
-    'no_show_warning'     => ['ch-rose',    '⚠️',  'No-Show Warning'],
-    'case_dismissed'      => ['ch-slate',   '📋', 'Case Dismissed'],
-    'cfa_issued'          => ['ch-violet',  '⚖️',  'CFA Issued'],
-    'mediation_completed' => ['ch-emerald', '✅', 'Mediation Completed'],
-    'mediation_cancelled' => ['ch-slate',   '❌', 'Mediation Cancelled'],
-    'case_escalated'      => ['ch-rose',    '🚨', 'Case Escalated'],
-    'general'             => ['ch-slate',   '📄', 'General Notice'],
-];
-
-$penalty_chip = [
-    'pending' => 'ch-amber',
-    'paid'    => 'ch-emerald',
-    'waived'  => 'ch-slate',
-    'overdue' => 'ch-rose',
-];
-
-// Config for event-derived sanction display
 $referred_labels = [
-    'refer_police'          => ['🚔', 'Referred to Police (PNP)',         'rose',  'This case has been referred to the Philippine National Police.'],
-    'refer_vawc'            => ['🛡️', 'Referred to VAWC Desk',             'rose',  'This case was escalated to the Violence Against Women and Children desk.'],
-    'refer_dswd'            => ['👨‍👩‍👧', 'Referred to DSWD / WCPD',          'rose',  'This case was referred to the Department of Social Welfare and Development.'],
-    'refer_nbi'             => ['🔍', 'Referred to NBI',                   'rose',  'This case has been referred to the National Bureau of Investigation.'],
-    'refer_attorney'        => ['⚖️', 'Referred to Attorney / PAO',        'amber', 'This case was referred for legal representation.'],
-    'escalate_municipality' => ['🏛️', 'Escalated to Municipality',         'amber', 'This case has been escalated to the municipal level for further action.'],
-    'certificate_to_file'   => ['📜', 'Certificate to File Action Issued', 'rose',  'A Certificate to File Action has been issued. You may be summoned to court.'],
+    'refer_police'          => 'Referred to Police (PNP)',
+    'refer_vawc'            => 'Referred to VAWC Desk',
+    'refer_dswd'            => 'Referred to DSWD / WCPD',
+    'refer_nbi'             => 'Referred to NBI',
+    'refer_attorney'        => 'Referred to Attorney / PAO',
+    'escalate_municipality' => 'Escalated to Municipality',
+    'certificate_to_file'   => 'Certificate to File Action Issued',
 ];
 
-// Split notifications by role for tab counts
-$notifs_as_complainant = array_filter($notifications, fn($n) => $n['recipient_type'] === 'complainant');
-$notifs_as_respondent  = array_filter($notifications, fn($n) => $n['recipient_type'] === 'respondent');
+// ══════════════════════════════════════════════════════════════
+// Normalize everything in the Sanctions tab into ONE row shape so
+// it can render as a single clean table instead of stacked, bespoke
+// card sections per category.
+// ══════════════════════════════════════════════════════════════
+$sanction_rows = [];
 
-// Tab counts
-$count_sanctions = count($penalties_as_respondent) + count($penalties_as_complainant) + count($event_sanctions);
-$count_notices   = count($notifications);
+foreach ($penalties_as_respondent as $p) {
+    $is_overdue = ($p['penalty_status'] === 'pending' && !empty($p['due_date']) && $p['due_date'] < date('Y-m-d'));
+    $sanction_rows[] = [
+        'type' => 'penalty', 'type_label' => 'Formal Penalty',
+        'role' => 'respondent', 'role_label' => 'Respondent', 'severity' => 'rose',
+        'title' => $p['reason'],
+        'case_number' => $p['case_number'], 'incident_type' => $p['incident_type'],
+        'counterpart' => $p['complainant_name'], 'counterpart_label' => 'Filed by',
+        'amount' => (float)$p['amount'], 'hours' => (int)$p['community_hours'],
+        'status_label' => $is_overdue ? 'Overdue' : ucfirst($p['penalty_status']),
+        'status_chip'  => $is_overdue ? 'ch-rose' : ($penalty_chip[$p['penalty_status']] ?? 'ch-slate'),
+        'date' => $p['created_at'], 'due_date' => $p['due_date'],
+        'detail' => $is_overdue
+            ? 'This penalty is past its due date. Please settle it at the Barangay Hall or contact your barangay officer immediately.'
+            : 'A formal penalty was issued against you as the respondent in this case. Settle at the Barangay Hall on or before the due date.',
+        'blotter_id' => $p['blotter_id'],
+        'search' => strtolower(trim(($p['case_number']??'').' '.($p['incident_type']??'').' '.$p['reason'].' '.($p['complainant_name']??''))),
+    ];
+}
+foreach ($penalties_as_complainant as $p) {
+    $is_overdue = ($p['penalty_status'] === 'pending' && !empty($p['due_date']) && $p['due_date'] < date('Y-m-d'));
+    $sanction_rows[] = [
+        'type' => 'penalty', 'type_label' => 'Formal Penalty',
+        'role' => 'complainant', 'role_label' => 'Complainant', 'severity' => 'amber',
+        'title' => $p['reason'],
+        'case_number' => $p['case_number'], 'incident_type' => $p['incident_type'],
+        'counterpart' => $p['respondent_name'], 'counterpart_label' => 'Against',
+        'amount' => (float)$p['amount'], 'hours' => (int)$p['community_hours'],
+        'status_label' => $is_overdue ? 'Overdue' : ucfirst($p['penalty_status']),
+        'status_chip'  => $is_overdue ? 'ch-rose' : ($penalty_chip[$p['penalty_status']] ?? 'ch-slate'),
+        'date' => $p['created_at'], 'due_date' => $p['due_date'],
+        'detail' => 'A formal penalty was issued to you in your role as complainant in this case. Settle at the Barangay Hall on or before the due date.',
+        'blotter_id' => $p['blotter_id'],
+        'search' => strtolower(trim(($p['case_number']??'').' '.($p['incident_type']??'').' '.$p['reason'].' '.($p['respondent_name']??''))),
+    ];
+}
 
-$has_any = $count_sanctions > 0 || $count_notices > 0;
+$resp_consequences = [
+    1 => ['1st missed session', 'Hearing rescheduled. A final warning has been issued. A second no-show will allow the complainant to bring this case to court (Certification to File Action).'],
+    2 => ['2nd missed session — CFA issued', 'A Certification to File Action (CFA) has been issued to the complainant. They may now elevate this case to court. Contact your barangay immediately.'],
+];
+$comp_consequences = [
+    1 => ['1st missed session', 'Hearing rescheduled. This is your first absence. A second no-show may result in your case being dismissed by the barangay.'],
+    2 => ['2nd missed session — case dismissed', 'Your case has been dismissed due to repeated absence. You are barred from filing the same case in court (Sec. 412, Local Government Code).'],
+];
 
-// Unread count for badge
-$unread_count = count(array_filter($notifications, fn($n) => $n['status'] !== 'read' && $n['read_at'] === null));
+foreach ($event_sanctions as $e) {
+    if ($e['event_type'] === 'missed_hearing' && $e['my_role'] === 'respondent') {
+        $miss = (int)($e['respondent_missed'] ?? 0);
+        $rule = $resp_consequences[min($miss, 2)] ?? null;
+        $sanction_rows[] = [
+            'type' => 'missed_hearing', 'type_label' => 'Missed Hearing',
+            'role' => 'respondent', 'role_label' => 'Respondent', 'severity' => $miss >= 2 ? 'rose' : 'amber',
+            'title' => $rule ? $rule[0] : 'Missed mediation hearing',
+            'case_number' => $e['case_number'], 'incident_type' => $e['incident_type'],
+            'counterpart' => $e['complainant_name'] ?? null, 'counterpart_label' => 'Filed by',
+            'amount' => null, 'hours' => null,
+            'status_label' => 'No-Show', 'status_chip' => $miss >= 2 ? 'ch-rose' : 'ch-amber',
+            'date' => $e['hearing_date'],
+            'detail' => $rule ? $rule[1] : 'You were required to attend this mediation hearing but did not appear. Contact your barangay officer if you had a valid reason.',
+            'blotter_id' => $e['blotter_id'],
+            'search' => strtolower(trim(($e['case_number']??'').' '.($e['incident_type']??'').' missed hearing no-show '.($e['complainant_name']??''))),
+        ];
+    } elseif ($e['event_type'] === 'missed_hearing' && $e['my_role'] === 'complainant') {
+        $miss = (int)($e['complainant_missed'] ?? 0);
+        $rule = $comp_consequences[min($miss, 2)] ?? null;
+        $sanction_rows[] = [
+            'type' => 'missed_hearing', 'type_label' => 'Missed Hearing',
+            'role' => 'complainant', 'role_label' => 'Complainant', 'severity' => $miss >= 2 ? 'rose' : 'amber',
+            'title' => $rule ? $rule[0] : 'You missed a mediation hearing',
+            'case_number' => $e['case_number'], 'incident_type' => $e['incident_type'],
+            'counterpart' => $e['respondent_name'] ?? null, 'counterpart_label' => 'Against',
+            'amount' => null, 'hours' => null,
+            'status_label' => 'No-Show', 'status_chip' => $miss >= 2 ? 'ch-rose' : 'ch-amber',
+            'date' => $e['hearing_date'],
+            'detail' => $rule ? $rule[1] : 'As the complainant, your attendance at hearings is required. Repeated no-shows may result in your case being dismissed under the Katarungang Pambarangay Law.',
+            'blotter_id' => $e['blotter_id'],
+            'search' => strtolower(trim(($e['case_number']??'').' '.($e['incident_type']??'').' missed hearing no-show '.($e['respondent_name']??''))),
+        ];
+    } elseif ($e['event_type'] === 'case_referred' && $e['my_role'] === 'respondent') {
+        $label = $referred_labels[$e['prescribed_action']] ?? 'Case Referred to Authorities';
+        $sanction_rows[] = [
+            'type' => 'case_referred', 'type_label' => 'Referred / Escalated',
+            'role' => 'respondent', 'role_label' => 'Respondent', 'severity' => 'rose',
+            'title' => $label,
+            'case_number' => $e['case_number'], 'incident_type' => $e['incident_type'],
+            'counterpart' => $e['complainant_name'] ?? null, 'counterpart_label' => 'Filed by',
+            'amount' => null, 'hours' => null,
+            'status_label' => 'Referred', 'status_chip' => 'ch-rose',
+            'date' => $e['event_date'],
+            'detail' => 'This case has been referred beyond the barangay level. You may be contacted or summoned. Contact your barangay officer for guidance.',
+            'blotter_id' => $e['blotter_id'],
+            'search' => strtolower(trim(($e['case_number']??'').' '.($e['incident_type']??'').' '.$label.' referred escalated '.($e['complainant_name']??''))),
+        ];
+    } elseif ($e['event_type'] === 'case_referred' && $e['my_role'] === 'complainant') {
+        $label = $referred_labels[$e['prescribed_action']] ?? 'Case Referred to Authorities';
+        $sanction_rows[] = [
+            'type' => 'case_referred', 'type_label' => 'Referred / Escalated',
+            'role' => 'complainant', 'role_label' => 'Complainant', 'severity' => 'teal',
+            'title' => $label,
+            'case_number' => $e['case_number'], 'incident_type' => $e['incident_type'],
+            'counterpart' => $e['respondent_name'] ?? null, 'counterpart_label' => 'Against',
+            'amount' => null, 'hours' => null,
+            'status_label' => 'Escalated', 'status_chip' => 'ch-teal',
+            'date' => $e['event_date'],
+            'detail' => 'Your case has been escalated beyond the barangay level. A barangay officer will update you on next steps.',
+            'blotter_id' => $e['blotter_id'],
+            'search' => strtolower(trim(($e['case_number']??'').' '.($e['incident_type']??'').' '.$label.' referred escalated '.($e['respondent_name']??''))),
+        ];
+    } elseif ($e['event_type'] === 'case_dismissed' && $e['my_role'] === 'complainant') {
+        $miss = (int)($e['complainant_missed'] ?? 0);
+        $sanction_rows[] = [
+            'type' => 'case_dismissed', 'type_label' => 'Case Dismissed',
+            'role' => 'complainant', 'role_label' => 'Complainant', 'severity' => 'slate',
+            'title' => 'Case dismissed',
+            'case_number' => $e['case_number'], 'incident_type' => $e['incident_type'],
+            'counterpart' => $e['respondent_name'] ?? null, 'counterpart_label' => 'Against',
+            'amount' => null, 'hours' => null,
+            'status_label' => 'Dismissed', 'status_chip' => 'ch-slate',
+            'date' => $e['event_date'],
+            'detail' => $miss >= 2
+                ? "Your case was dismissed because you failed to appear at $miss scheduled mediation hearings. Under Sec. 412 of the Local Government Code, you are barred from filing the same case in court."
+                : 'This case was dismissed by the barangay officer. If you believe the dismissal is incorrect, you may request a review.',
+            'blotter_id' => $e['blotter_id'],
+            'search' => strtolower(trim(($e['case_number']??'').' '.($e['incident_type']??'').' dismissed '.($e['respondent_name']??''))),
+        ];
+    } elseif ($e['event_type'] === 'case_dismissed' && $e['my_role'] === 'respondent') {
+        $sanction_rows[] = [
+            'type' => 'case_dismissed', 'type_label' => 'Case Dismissed',
+            'role' => 'respondent', 'role_label' => 'Respondent', 'severity' => 'teal',
+            'title' => 'Case dismissed in your favor',
+            'case_number' => $e['case_number'], 'incident_type' => $e['incident_type'],
+            'counterpart' => $e['complainant_name'] ?? null, 'counterpart_label' => 'Filed by',
+            'amount' => null, 'hours' => null,
+            'status_label' => 'Dismissed', 'status_chip' => 'ch-emerald',
+            'date' => $e['event_date'],
+            'detail' => 'This case has been dismissed. No further action is required from you at this time. Keep this record for reference in case the same matter is raised again.',
+            'blotter_id' => $e['blotter_id'],
+            'search' => strtolower(trim(($e['case_number']??'').' '.($e['incident_type']??'').' dismissed '.($e['complainant_name']??''))),
+        ];
+    }
+}
+
+// Sort newest first
+usort($sanction_rows, fn($a, $b) => strtotime($b['date'] ?? '1970-01-01') <=> strtotime($a['date'] ?? '1970-01-01'));
+
+$count_sanctions = count($sanction_rows);
+
+$severity_chip = ['rose'=>'ch-rose','amber'=>'ch-amber','teal'=>'ch-teal','slate'=>'ch-slate'];
 ?>
 
-<!-- ══════════════════════════════════════════
-     PAGE-LEVEL STYLES
-══════════════════════════════════════════ -->
 <style>
-/* ── Tabs ──────────────────────────────── */
-.notices-tabs {
-    display: flex;
-    gap: 0;
-    border-bottom: 2px solid var(--ink-100);
-    margin-bottom: 22px;
-}
-.ntab {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 10px 20px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--ink-400);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    transition: color .12s, border-color .12s;
-    background: none;
-    border-top: none;
-    border-left: none;
-    border-right: none;
-    font-family: inherit;
-    white-space: nowrap;
-}
-.ntab:hover { color: var(--ink-700); }
-.ntab.active { color: var(--teal-600); border-bottom-color: var(--teal-600); }
-.ntab.active.danger { color: var(--rose-600); border-bottom-color: var(--rose-600); }
-.ntab-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 20px;
-    font-size: 10px;
-    font-weight: 700;
-}
-.nb-teal  { background: var(--teal-50);   color: var(--teal-600); }
-.nb-rose  { background: var(--rose-50);   color: var(--rose-600); }
-.nb-amber { background: var(--amber-50);  color: var(--amber-600); }
-.nb-slate { background: var(--ink-50);    color: var(--ink-400); }
-
-/* ── Tab panels ────────────────────────── */
-.ntab-panel { display: none; }
-.ntab-panel.active { display: block; }
-
-/* ── Section subheader ─────────────────── */
-.notices-subhdr {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--ink-400);
-    letter-spacing: .07em;
-    text-transform: uppercase;
-    margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.notices-subhdr::after { content:''; flex:1; height:1px; background:var(--ink-100); }
-
-/* ── Respondent penalty card (red-toned) ── */
-.penalty-card-respondent {
-    border-left: 4px solid var(--rose-400);
-    background: linear-gradient(135deg, rgba(254,242,242,.6) 0%, var(--white) 60%);
-}
-/* ── Complainant penalty card (amber-toned) ── */
-.penalty-card-complainant {
-    border-left: 4px solid var(--amber-400);
-    background: linear-gradient(135deg, rgba(255,251,235,.6) 0%, var(--white) 60%);
-}
-
-/* ── Notification card: respondent role ─── */
-.notif-card-respondent {
-    border-left: 4px solid var(--rose-300);
-    background: linear-gradient(135deg, rgba(254,242,242,.35) 0%, var(--white) 50%);
-}
-/* ── Notification card: complainant role ── */
-.notif-card-complainant {
-    border-left: 4px solid var(--teal-400);
-}
-/* ── New badge highlight ────────────────── */
-.notif-card-new {
-    box-shadow: 0 0 0 1px var(--amber-200);
-}
-
-/* ── Role pill ─────────────────────────── */
-.role-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 20px;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-}
-.rp-respondent  { background: var(--rose-50);  color: var(--rose-600);  border: 1px solid var(--rose-100); }
-.rp-complainant { background: var(--teal-50);  color: var(--teal-700);  border: 1px solid var(--teal-100); }
-
-/* ── Penalty amount display ─────────────── */
-.penalty-amount {
-    font-size: 22px;
-    font-weight: 800;
-    line-height: 1;
-}
-.pa-respondent  { color: var(--rose-600); }
-.pa-complainant { color: var(--amber-600); }
-
-/* ── Hearing callout ───────────────────── */
-.hearing-callout {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
-    border-radius: var(--r-md);
-    margin-top: 10px;
-    font-size: 12px;
-    font-weight: 600;
-}
-.hc-teal   { background: var(--teal-50);  border: 1px solid var(--teal-100);  color: var(--teal-700); }
-.hc-rose   { background: var(--rose-50);  border: 1px solid var(--rose-100);  color: var(--rose-700); }
-
-/* ── Event-derived sanction cards ──────── */
-.event-card-missed-resp {
-    border-left: 4px solid var(--rose-400);
-    background: linear-gradient(135deg, rgba(254,242,242,.5) 0%, var(--white) 60%);
-}
-.event-card-missed-comp {
-    border-left: 4px solid var(--amber-400);
-    background: linear-gradient(135deg, rgba(255,251,235,.5) 0%, var(--white) 60%);
-}
-.event-card-referred-resp {
-    border-left: 4px solid var(--rose-500);
-    background: linear-gradient(135deg, rgba(254,226,226,.5) 0%, var(--white) 60%);
-}
-.event-card-referred-comp {
-    border-left: 4px solid var(--teal-400);
-    background: linear-gradient(135deg, rgba(240,253,250,.5) 0%, var(--white) 60%);
-}
-.event-card-dismissed {
-    border-left: 4px solid var(--ink-300);
-    background: linear-gradient(135deg, rgba(248,250,252,.8) 0%, var(--white) 60%);
-}
-.event-tag {
-    display: inline-flex; align-items: center; gap: 4px;
-    font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px;
-    text-transform: uppercase; letter-spacing: .04em;
-}
-.et-warning { background: var(--rose-50);  color: var(--rose-600);  border: 1px solid var(--rose-200); }
-.et-caution { background: var(--amber-50); color: var(--amber-700); border: 1px solid var(--amber-200); }
-.et-info    { background: var(--teal-50);  color: var(--teal-700);  border: 1px solid var(--teal-200); }
-.et-neutral { background: var(--ink-50);   color: var(--ink-500);   border: 1px solid var(--ink-100); }
-
-/* ── Filter bar spacing ─────────────────── */
-.notices-filter-bar {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
-    align-items: center;
-}
-.nf-count {
-    font-size: 12px;
-    color: var(--ink-400);
-    white-space: nowrap;
-    align-self: center;
-}
-
-/* ── Empty ─────────────────────────────── */
-.ntab-empty {
-    text-align: center;
-    padding: 48px 24px;
-    color: var(--ink-300);
-}
-.ntab-empty .es-icon  { font-size: 36px; margin-bottom: 12px; }
-.ntab-empty .es-title { font-size: 15px; font-weight: 600; color: var(--ink-400); margin-bottom: 6px; }
-.ntab-empty .es-sub   { font-size: 13px; }
+.ntab-bar { display:flex; gap:0; border-bottom:2px solid var(--ink-100); margin-bottom:18px; }
+.ntab { display:inline-flex; align-items:center; gap:7px; padding:10px 18px; font-size:13px; font-weight:600;
+        color:var(--ink-400); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px;
+        transition:color .12s,border-color .12s; background:none; border-top:none; border-left:none; border-right:none;
+        font-family:inherit; white-space:nowrap; }
+.ntab:hover { color:var(--ink-700); }
+.ntab.active { color:var(--teal-600); border-bottom-color:var(--teal-600); }
+.ntab-badge { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px;
+              padding:0 5px; border-radius:20px; font-size:10px; font-weight:700; background:var(--ink-50); color:var(--ink-400); }
+.ntab-badge.attn { background:var(--amber-50); color:var(--amber-600); }
+.ntab-panel { display:none; }
+.ntab-panel.active { display:block; }
+.notices-filter-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center; }
+.nf-count { font-size:12px; color:var(--ink-400); white-space:nowrap; align-self:center; }
+.role-pill { display:inline-flex; align-items:center; font-size:10px; font-weight:700; padding:2px 8px;
+             border-radius:20px; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+.rp-respondent  { background:var(--rose-50); color:var(--rose-600); border:1px solid var(--rose-100); }
+.rp-complainant { background:var(--teal-50); color:var(--teal-700); border:1px solid var(--teal-100); }
+tr.unread-row td:first-child { box-shadow: inset 3px 0 0 var(--amber-400); }
 </style>
 
-<!-- ══════════════════════════════════════════
-     PAGE HEADER
-══════════════════════════════════════════ -->
 <div class="page-hdr">
   <div class="page-hdr-left">
-    <h2>Notices &amp; Sanctions</h2>
-    <p>Notifications and penalties issued to you by your barangay</p>
+    <h2>Sanctions &amp; Penalties</h2>
+    <p>Penalties and case events issued to you by your barangay</p>
   </div>
-  <?php if ($unread_count > 0): ?>
-  <div class="page-hdr-actions">
-    <span class="chip ch-amber"><?= $unread_count ?> unread</span>
-  </div>
-  <?php endif; ?>
 </div>
 
-<?php if (!$has_any): ?>
+<?php if ($count_sanctions === 0): ?>
 <div class="empty-state">
-  <div class="es-icon">🔔</div>
-  <div class="es-title">No notices yet</div>
-  <div class="es-sub">Formal notices from your barangay will appear here</div>
+  <div class="es-icon">OK</div>
+  <div class="es-title">No sanctions on record</div>
+  <div class="es-sub">Penalties and case events issued to you will appear here</div>
 </div>
 
 <?php else: ?>
 
-<!-- ══════════════════════════════════════════
-     TABS
-══════════════════════════════════════════ -->
-<div class="notices-tabs">
+<div id="panel-sanctions" class="ntab-panel active">
 
-  <!-- Tab 1: Sanctions -->
-  <button class="ntab active danger" onclick="switchTab('sanctions', this)">
-    ⚖️ Sanctions &amp; Penalties
-    <?php if ($count_sanctions > 0): ?>
-    <span class="ntab-badge nb-rose"><?= $count_sanctions ?></span>
-    <?php endif; ?>
-  </button>
+  <div class="notices-filter-bar">
+    <div class="inp-icon" style="flex:1;min-width:180px;max-width:280px">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4"/><path d="M10 10l2.5 2.5"/></svg>
+      <input type="search" id="sanction-search" placeholder="Search case no., type, party…" oninput="filterSanctions(true)">
+    </div>
+    <select id="sanction-filter-role" onchange="filterSanctions(true)" style="width:auto;min-width:150px">
+      <option value="">All Roles</option>
+      <option value="complainant">As Complainant</option>
+      <option value="respondent">As Respondent</option>
+    </select>
+    <select id="sanction-filter-type" onchange="filterSanctions(true)" style="width:auto;min-width:170px">
+      <option value="">All Types</option>
+      <option value="penalty">Formal Penalties</option>
+      <option value="missed_hearing">Missed Hearings</option>
+      <option value="case_referred">Referred / Escalated</option>
+      <option value="case_dismissed">Dismissed Cases</option>
+    </select>
+    <button class="btn btn-outline btn-sm" onclick="clearSanctionFilters()">✕ Clear</button>
+    <span id="sanction-count" class="nf-count"></span>
+  </div>
 
-  <!-- Tab 2: All Notices -->
-  <button class="ntab" onclick="switchTab('notices', this)">
-    🔔 Case Notifications
-    <?php if ($count_notices > 0): ?>
-    <span class="ntab-badge <?= $unread_count > 0 ? 'nb-amber' : 'nb-teal' ?>"><?= $count_notices ?></span>
-    <?php endif; ?>
-  </button>
+  <div id="sanction-no-results" style="display:none">
+    <div class="empty-state"><div class="es-icon">🔍</div><div class="es-title">No sanctions match</div><div class="es-sub">Try adjusting the search or filter options.</div></div>
+  </div>
+
+  <div class="card">
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Case</th><th>Type</th><th>Role</th><th>Amount / Consequence</th><th>Status</th><th>Date</th><th></th></tr></thead>
+        <tbody id="sanction-tbody">
+        <?php foreach ($sanction_rows as $i => $r): ?>
+          <tr class="sanction-row"
+              data-role="<?= e($r['role']) ?>"
+              data-type="<?= e($r['type']) ?>"
+              data-search="<?= e($r['search']) ?>">
+            <td>
+              <div class="td-mono"><?= e($r['case_number'] ?: '—') ?></div>
+              <div style="font-size:11px;color:var(--ink-400)"><?= e($r['incident_type'] ?: '') ?></div>
+            </td>
+            <td style="font-size:12px"><?= e($r['type_label']) ?></td>
+            <td><span class="role-pill <?= $r['role']==='respondent'?'rp-respondent':'rp-complainant' ?>"><?= e($r['role_label']) ?></span></td>
+            <td>
+              <?php if ($r['amount'] !== null): ?>
+                <div style="font-weight:700;color:var(--rose-600)">₱<?= number_format($r['amount'], 2) ?></div>
+                <?php if ($r['hours']): ?><div style="font-size:11px;color:var(--ink-500)">+ <?= (int)$r['hours'] ?> hrs service</div><?php endif; ?>
+              <?php else: ?>
+                <div style="font-size:12px;color:var(--ink-700);max-width:260px"><?= e($r['title']) ?></div>
+              <?php endif; ?>
+            </td>
+            <td><span class="chip <?= e($r['status_chip']) ?>"><?= e($r['status_label']) ?></span></td>
+            <td style="font-size:12px;color:var(--ink-400);white-space:nowrap"><?= $r['date'] ? date('M j, Y', strtotime($r['date'])) : '—' ?></td>
+            <td>
+              <div style="display:flex;gap:4px;flex-wrap:nowrap">
+                <button class="act-btn" onclick="viewSanctionDetail(<?= $i ?>)">Details</button>
+                <?php if ($r['blotter_id']): ?><button class="act-btn" onclick="viewBlotter(<?= (int)$r['blotter_id'] ?>)">Case</button><?php endif; ?>
+              </div>
+            </td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <div id="sanction-pager" class="card-foot" style="display:none"></div>
+  </div>
 
 </div>
 
-<!-- ══════════════════════════════════════════
-     PANEL 1: SANCTIONS & PENALTIES
-══════════════════════════════════════════ -->
-<div id="panel-sanctions" class="ntab-panel active">
-
-  <?php if (empty($penalties_as_respondent) && empty($penalties_as_complainant) && empty($event_sanctions)): ?>
-    <div class="ntab-empty">
-      <div class="es-icon">✅</div>
-      <div class="es-title">No sanctions on record</div>
-      <div class="es-sub">Penalties and case events issued to you will appear here</div>
-    </div>
-
-  <?php else: ?>
-
-    <!-- Filter bar -->
-    <div class="notices-filter-bar">
-      <div class="inp-icon" style="flex:1;min-width:180px;max-width:300px">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4"/><path d="M10 10l2.5 2.5"/></svg>
-        <input type="search" id="sanction-search" placeholder="Search case no., type, party..." oninput="filterSanctions(true)">
+<!-- Sanction detail modal -->
+<div class="modal-overlay" id="modal-detail">
+  <div class="modal" style="width:600px">
+    <div class="modal-hdr"><span class="modal-title" id="detail-title">Details</span><button class="modal-x" onclick="closeModal('modal-detail')">×</button></div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap" id="detail-chips"></div>
+      <div class="dr"><span class="dr-lbl">Case</span><span class="dr-val" id="detail-case"></span></div>
+      <div class="dr" id="detail-counterpart-row"><span class="dr-lbl" id="detail-counterpart-label"></span><span class="dr-val" id="detail-counterpart"></span></div>
+      <div class="dr" id="detail-amount-row"><span class="dr-lbl">Amount</span><span class="dr-val" id="detail-amount" style="font-weight:700;color:var(--rose-600)"></span></div>
+      <div class="dr" id="detail-due-row"><span class="dr-lbl">Due Date</span><span class="dr-val" id="detail-due"></span></div>
+      <div class="dr"><span class="dr-lbl">Date</span><span class="dr-val" id="detail-date"></span></div>
+      <div id="detail-text-wrap" style="margin-top:14px;padding:12px 14px;border-radius:var(--r-md);background:var(--surface);border:1px solid var(--ink-100)">
+        <p id="detail-text" style="font-size:13px;line-height:1.7;color:var(--ink-700);margin:0;white-space:pre-wrap"></p>
       </div>
-      <select id="sanction-filter-role" onchange="filterSanctions(true)" style="width:auto;min-width:160px">
-        <option value="">All Roles</option>
-        <option value="complainant">As Complainant</option>
-        <option value="respondent">As Respondent</option>
-      </select>
-      <select id="sanction-filter-type" onchange="filterSanctions(true)" style="width:auto;min-width:170px">
-        <option value="">All Types</option>
-        <option value="penalty">Formal Penalties</option>
-        <option value="missed_hearing">Missed Hearings</option>
-        <option value="case_referred">Referred / Escalated</option>
-        <option value="case_dismissed">Dismissed Cases</option>
-      </select>
-      <select id="sanction-filter-status" onchange="filterSanctions(true)" style="width:auto;min-width:140px">
-        <option value="">All Statuses</option>
-        <option value="pending">Pending</option>
-        <option value="paid">Paid</option>
-        <option value="waived">Waived</option>
-        <option value="overdue">Overdue</option>
-        <option value="no_show">No-Show</option>
-        <option value="referred">Referred</option>
-        <option value="dismissed">Dismissed</option>
-      </select>
-      <button class="btn btn-outline btn-sm" onclick="clearSanctionFilters()">Clear</button>
-      <span id="sanction-count" class="nf-count"></span>
+      <div id="detail-hearing-row" style="display:none;margin-top:10px;font-size:12px;color:var(--teal-700);background:var(--teal-50);border:1px solid var(--teal-100);border-radius:var(--r-sm);padding:8px 10px"></div>
     </div>
-
-    <!-- No filter results -->
-    <div id="sanction-no-results" style="display:none">
-      <div class="ntab-empty">
-        <div class="es-icon">🔍</div>
-        <div class="es-title">No sanctions match</div>
-        <div class="es-sub">Try adjusting the search or filter options.</div>
-      </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('modal-detail')">Close</button>
+      <button class="btn btn-primary" id="detail-view-case-btn">View Case</button>
     </div>
+  </div>
+</div>
 
-    <!-- ─────────────────────────────────────────────
-         SECTION A: Formal Penalties (from penalties table)
-    ──────────────────────────────────────────────── -->
-
-    <?php if (!empty($penalties_as_respondent)): ?>
-    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="penalty-respondent" style="color:var(--rose-600)">
-      <span>🚨 Formal Penalties Against You</span>
-    </div>
-    <div class="sanction-group" data-sanction-group="penalty-respondent" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
-      <?php foreach ($penalties_as_respondent as $p):
-        $is_overdue = ($p['penalty_status'] === 'pending' && !empty($p['due_date']) && $p['due_date'] < date('Y-m-d'));
-        $pchip  = $is_overdue ? 'ch-rose' : ($penalty_chip[$p['penalty_status']] ?? 'ch-slate');
-        $plabel = $is_overdue ? 'Overdue' : ucfirst($p['penalty_status']);
-        $psearch = strtolower(trim(($p['case_number'] ?? '') . ' ' . ($p['incident_type'] ?? '') . ' ' . ($p['reason'] ?? '') . ' ' . ($p['complainant_name'] ?? '')));
-      ?>
-      <div class="card penalty-card-respondent sanction-card"
-           data-sanction-role="respondent"
-           data-sanction-type="penalty"
-           data-sanction-status="<?= e($is_overdue ? 'overdue' : ($p['penalty_status'] ?? '')) ?>"
-           data-sanction-search="<?= e($psearch) ?>">
-        <div class="card-body" style="padding:16px 18px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-            <div style="display:flex;align-items:flex-start;gap:12px">
-              <div style="font-size:24px;line-height:1;margin-top:2px">🚨</div>
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-                  <div style="font-size:14px;font-weight:700;color:var(--ink-900)"><?= e($p['reason']) ?></div>
-                  <span class="role-pill rp-respondent">You are the respondent</span>
-                </div>
-                <div style="font-size:11px;font-family:var(--font-mono);color:var(--ink-400)">
-                  <?= e($p['case_number']) ?>
-                  <?php if ($p['incident_type']): ?>&nbsp;·&nbsp;<?= e($p['incident_type']) ?><?php endif; ?>
-                  <?php if ($p['complainant_name']): ?>&nbsp;·&nbsp;Filed by <?= e($p['complainant_name']) ?><?php endif; ?>
-                </div>
-                <div style="margin-top:10px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-                  <div class="penalty-amount pa-respondent">&#8369;<?= number_format((float)$p['amount'], 2) ?></div>
-                  <?php if ((int)$p['community_hours'] > 0): ?>
-                  <div style="font-size:12px;color:var(--ink-600);font-weight:500">+ <?= (int)$p['community_hours'] ?> hrs community service</div>
-                  <?php endif; ?>
-                </div>
-                <?php if ($is_overdue): ?>
-                <div style="margin-top:8px;font-size:12px;font-weight:700;color:var(--rose-600)">⏰ This penalty is overdue. Please contact your barangay immediately.</div>
-                <?php endif; ?>
-              </div>
-            </div>
-            <div style="text-align:right;flex-shrink:0">
-              <span class="chip <?= $pchip ?>"><?= $plabel ?></span>
-              <div style="font-size:11px;color:var(--ink-400);margin-top:6px">Issued: <?= date('M j, Y', strtotime($p['created_at'])) ?></div>
-              <?php if ($p['due_date']): ?>
-              <div style="font-size:11px;margin-top:2px;font-weight:<?= $is_overdue?'700':'400' ?>;color:<?= $is_overdue?'var(--rose-600)':'var(--ink-400)' ?>">
-                Due: <?= date('M j, Y', strtotime($p['due_date'])) ?>
-              </div>
-              <?php endif; ?>
-            </div>
-          </div>
-        </div>
-      </div>
-      <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-
-    <?php if (!empty($penalties_as_complainant)): ?>
-    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="penalty-complainant" style="color:var(--amber-600)">
-      <span>📋 Formal Penalties Issued to You as Complainant</span>
-    </div>
-    <div class="sanction-group" data-sanction-group="penalty-complainant" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
-      <?php foreach ($penalties_as_complainant as $p):
-        $is_overdue = ($p['penalty_status'] === 'pending' && !empty($p['due_date']) && $p['due_date'] < date('Y-m-d'));
-        $pchip  = $is_overdue ? 'ch-rose' : ($penalty_chip[$p['penalty_status']] ?? 'ch-slate');
-        $plabel = $is_overdue ? 'Overdue' : ucfirst($p['penalty_status']);
-        $psearch = strtolower(trim(($p['case_number'] ?? '') . ' ' . ($p['incident_type'] ?? '') . ' ' . ($p['reason'] ?? '') . ' ' . ($p['respondent_name'] ?? '')));
-      ?>
-      <div class="card penalty-card-complainant sanction-card"
-           data-sanction-role="complainant"
-           data-sanction-type="penalty"
-           data-sanction-status="<?= e($is_overdue ? 'overdue' : ($p['penalty_status'] ?? '')) ?>"
-           data-sanction-search="<?= e($psearch) ?>">
-        <div class="card-body" style="padding:16px 18px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-            <div style="display:flex;align-items:flex-start;gap:12px">
-              <div style="font-size:24px;line-height:1;margin-top:2px">💰</div>
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-                  <div style="font-size:14px;font-weight:700;color:var(--ink-900)"><?= e($p['reason']) ?></div>
-                  <span class="role-pill rp-complainant">You filed this case</span>
-                </div>
-                <div style="font-size:11px;font-family:var(--font-mono);color:var(--ink-400)">
-                  <?= e($p['case_number']) ?>
-                  <?php if ($p['incident_type']): ?>&nbsp;·&nbsp;<?= e($p['incident_type']) ?><?php endif; ?>
-                  <?php if ($p['respondent_name']): ?>&nbsp;·&nbsp;Against <?= e($p['respondent_name']) ?><?php endif; ?>
-                </div>
-                <div style="margin-top:10px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-                  <div class="penalty-amount pa-complainant">&#8369;<?= number_format((float)$p['amount'], 2) ?></div>
-                  <?php if ((int)$p['community_hours'] > 0): ?>
-                  <div style="font-size:12px;color:var(--ink-600);font-weight:500">+ <?= (int)$p['community_hours'] ?> hrs community service</div>
-                  <?php endif; ?>
-                </div>
-              </div>
-            </div>
-            <div style="text-align:right;flex-shrink:0">
-              <span class="chip <?= $pchip ?>"><?= $plabel ?></span>
-              <div style="font-size:11px;color:var(--ink-400);margin-top:6px">Issued: <?= date('M j, Y', strtotime($p['created_at'])) ?></div>
-              <?php if ($p['due_date']): ?>
-              <div style="font-size:11px;margin-top:2px;font-weight:<?= $is_overdue?'700':'400' ?>;color:<?= $is_overdue?'var(--rose-600)':'var(--ink-400)' ?>">
-                Due: <?= date('M j, Y', strtotime($p['due_date'])) ?>
-              </div>
-              <?php endif; ?>
-            </div>
-          </div>
-        </div>
-      </div>
-      <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-
-    <!-- ─────────────────────────────────────────────
-         SECTION B: Event-derived sanctions
-         (missed hearings, escalations, dismissals)
-    ──────────────────────────────────────────────── -->
-
-    <?php
-    // Group event sanctions by type+role for cleaner display
-    $ev_missed_resp     = array_values(array_filter($event_sanctions, fn($e) => $e['event_type']==='missed_hearing'  && $e['my_role']==='respondent'));
-    $ev_missed_comp     = array_values(array_filter($event_sanctions, fn($e) => $e['event_type']==='missed_hearing'  && $e['my_role']==='complainant'));
-    $ev_referred_resp   = array_values(array_filter($event_sanctions, fn($e) => $e['event_type']==='case_referred'   && $e['my_role']==='respondent'));
-    $ev_referred_comp   = array_values(array_filter($event_sanctions, fn($e) => $e['event_type']==='case_referred'   && $e['my_role']==='complainant'));
-    $ev_dismissed_comp  = array_values(array_filter($event_sanctions, fn($e) => $e['event_type']==='case_dismissed'  && $e['my_role']==='complainant'));
-    $ev_dismissed_resp  = array_values(array_filter($event_sanctions, fn($e) => $e['event_type']==='case_dismissed'  && $e['my_role']==='respondent'));
-
-    // Consequence descriptions by missed count
-    $resp_consequences = [
-        1 => ['⚠️ 1st missed session', 'Hearing rescheduled. A final warning has been issued. A second no-show will allow the complainant to bring this case to court (CFA).', 'var(--amber-700)', 'var(--amber-50)', 'var(--amber-100)'],
-        2 => ['🚨 2nd missed session', 'A Certification to File Action (CFA) has been issued to the complainant. They may now elevate this case to court. Contact your barangay immediately.', 'var(--rose-700)', 'var(--rose-50)', 'var(--rose-100)'],
-    ];
-    $comp_consequences = [
-        1 => ['⚠️ 1st missed session', 'Hearing rescheduled. This is your first absence. A second no-show may result in your case being dismissed by the barangay.', 'var(--amber-700)', 'var(--amber-50)', 'var(--amber-100)'],
-        2 => ['🚫 2nd missed session', 'Your case has been dismissed due to repeated absence. You are barred from filing the same case in court (Sec. 412, LGC).', 'var(--rose-700)', 'var(--rose-50)', 'var(--rose-100)'],
-    ];
-    ?>
-
-    <?php if (!empty($ev_missed_resp)): ?>
-    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="missed-respondent" style="color:var(--rose-600)">
-      <span>❌ Missed Hearings — You Were Required to Attend</span>
-    </div>
-    <div class="sanction-group" data-sanction-group="missed-respondent" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
-      <?php foreach ($ev_missed_resp as $e):
-        $miss_count  = (int)($e['respondent_missed'] ?? 0);
-        // Clamp to max rule index
-        $rule_key    = min($miss_count, 2);
-        $rule        = $rule_key > 0 ? ($resp_consequences[$rule_key] ?? null) : null;
-        $action_chip = $e['action_type'] === 'cfa_issued' ? '<span class="chip ch-violet" style="font-size:10px">CFA Issued</span>' : '';
-        $esearch = strtolower(trim(($e['case_number'] ?? '') . ' ' . ($e['incident_type'] ?? '') . ' missed hearing no-show ' . ($e['complainant_name'] ?? '')));
-      ?>
-      <div class="card event-card-missed-resp sanction-card"
-           data-sanction-role="respondent"
-           data-sanction-type="missed_hearing"
-           data-sanction-status="no_show"
-           data-sanction-search="<?= e($esearch) ?>">
-        <div class="card-body" style="padding:14px 18px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-            <div style="display:flex;align-items:flex-start;gap:12px">
-              <div style="font-size:22px;line-height:1;margin-top:2px">❌</div>
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-                  <div style="font-size:14px;font-weight:700;color:var(--ink-900)">Missed Mediation Hearing</div>
-                  <?php if ($miss_count > 0): ?>
-                  <span class="event-tag <?= $miss_count >= 2 ? 'et-warning' : 'et-caution' ?>"><?= $miss_count ?>x missed</span>
-                  <?php endif; ?>
-                  <span class="role-pill rp-respondent">Respondent</span>
-                  <?= $action_chip ?>
-                </div>
-                <div style="font-size:11px;font-family:var(--font-mono);color:var(--ink-400)">
-                  <?= e($e['case_number']) ?>&nbsp;·&nbsp;<?= e($e['incident_type']) ?>
-                  <?php if ($e['complainant_name']): ?>&nbsp;·&nbsp;Filed by <?= e($e['complainant_name']) ?><?php endif; ?>
-                </div>
-                <?php if ($rule): ?>
-                <div style="margin-top:8px;font-size:12px;font-weight:600;color:<?= $rule[2] ?>;line-height:1.6;background:<?= $rule[3] ?>;border:1px solid <?= $rule[4] ?>;border-radius:var(--r-sm);padding:8px 10px">
-                  <?= $rule[0] ?> — <?= $rule[1] ?>
-                </div>
-                <?php else: ?>
-                <div style="margin-top:8px;font-size:12px;color:var(--rose-700);line-height:1.6;background:var(--rose-50);border:1px solid var(--rose-100);border-radius:var(--r-sm);padding:8px 10px">
-                  You were required to attend this mediation hearing but did not appear. Contact your barangay officer if you had a valid reason.
-                </div>
-                <?php endif; ?>
-              </div>
-            </div>
-            <div style="text-align:right;flex-shrink:0;white-space:nowrap">
-              <span class="chip ch-rose">No-Show</span>
-              <div style="font-size:11px;color:var(--ink-400);margin-top:6px"><?= date('M j, Y', strtotime($e['hearing_date'])) ?></div>
-              <?php if ($e['hearing_time']): ?><div style="font-size:11px;color:var(--ink-400)"><?= date('g:i A', strtotime($e['hearing_time'])) ?></div><?php endif; ?>
-              <div style="font-size:11px;color:var(--ink-400)">📍 <?= e($e['venue'] ?: 'Barangay Hall') ?></div>
-            </div>
-          </div>
-        </div>
-        <div class="card-foot">
-          <button class="act-btn" onclick="viewBlotter(<?= $e['blotter_id'] ?>)">View Case</button>
-        </div>
-      </div>
-      <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-
-    <?php if (!empty($ev_missed_comp)): ?>
-    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="missed-complainant" style="color:var(--amber-600)">
-      <span>⚠️ Missed Hearings — Cases You Filed</span>
-    </div>
-    <div class="sanction-group" data-sanction-group="missed-complainant" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
-      <?php foreach ($ev_missed_comp as $e):
-        $miss_count = (int)($e['complainant_missed'] ?? 0);
-        $rule_key   = min($miss_count, 2);
-        $rule       = $rule_key > 0 ? ($comp_consequences[$rule_key] ?? null) : null;
-        $esearch = strtolower(trim(($e['case_number'] ?? '') . ' ' . ($e['incident_type'] ?? '') . ' missed hearing no-show ' . ($e['respondent_name'] ?? '')));
-      ?>
-      <div class="card event-card-missed-comp sanction-card"
-           data-sanction-role="complainant"
-           data-sanction-type="missed_hearing"
-           data-sanction-status="no_show"
-           data-sanction-search="<?= e($esearch) ?>">
-        <div class="card-body" style="padding:14px 18px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-            <div style="display:flex;align-items:flex-start;gap:12px">
-              <div style="font-size:22px;line-height:1;margin-top:2px">⚠️</div>
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-                  <div style="font-size:14px;font-weight:700;color:var(--ink-900)">You Missed a Mediation Hearing</div>
-                  <?php if ($miss_count > 0): ?>
-                  <span class="event-tag <?= $miss_count >= 2 ? 'et-warning' : 'et-caution' ?>"><?= $miss_count ?>x missed</span>
-                  <?php endif; ?>
-                  <span class="role-pill rp-complainant">Complainant</span>
-                </div>
-                <div style="font-size:11px;font-family:var(--font-mono);color:var(--ink-400)">
-                  <?= e($e['case_number']) ?>&nbsp;·&nbsp;<?= e($e['incident_type']) ?>
-                  <?php if ($e['respondent_name']): ?>&nbsp;·&nbsp;Against <?= e($e['respondent_name']) ?><?php endif; ?>
-                </div>
-                <?php if ($rule): ?>
-                <div style="margin-top:8px;font-size:12px;font-weight:600;color:<?= $rule[2] ?>;line-height:1.6;background:<?= $rule[3] ?>;border:1px solid <?= $rule[4] ?>;border-radius:var(--r-sm);padding:8px 10px">
-                  <?= $rule[0] ?> — <?= $rule[1] ?>
-                </div>
-                <?php else: ?>
-                <div style="margin-top:8px;font-size:12px;color:var(--amber-800);line-height:1.6;background:var(--amber-50);border:1px solid var(--amber-100);border-radius:var(--r-sm);padding:8px 10px">
-                  As the complainant, your attendance at hearings is required. Repeated no-shows may result in your case being dismissed under the <em>Katarungang Pambarangay Law</em>.
-                </div>
-                <?php endif; ?>
-              </div>
-            </div>
-            <div style="text-align:right;flex-shrink:0;white-space:nowrap">
-              <span class="chip ch-amber">No-Show</span>
-              <div style="font-size:11px;color:var(--ink-400);margin-top:6px"><?= date('M j, Y', strtotime($e['hearing_date'])) ?></div>
-              <?php if ($e['hearing_time']): ?><div style="font-size:11px;color:var(--ink-400)"><?= date('g:i A', strtotime($e['hearing_time'])) ?></div><?php endif; ?>
-              <div style="font-size:11px;color:var(--ink-400)">📍 <?= e($e['venue'] ?: 'Barangay Hall') ?></div>
-            </div>
-          </div>
-        </div>
-        <div class="card-foot">
-          <button class="act-btn" onclick="viewBlotter(<?= $e['blotter_id'] ?>)">View Case</button>
-        </div>
-      </div>
-      <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-
-    <?php if (!empty($ev_referred_resp)): ?>
-    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="referred-respondent" style="color:var(--rose-600)">
-      <span>🚔 Cases Referred to Authorities — You Are the Respondent</span>
-    </div>
-    <div class="sanction-group" data-sanction-group="referred-respondent" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
-      <?php foreach ($ev_referred_resp as $e):
-        $ref = $referred_labels[$e['prescribed_action']] ?? ['⚖️','Case Referred','rose','This case has been referred to an external authority.'];
-        [$ref_icon, $ref_label, $ref_color, $ref_desc] = $ref;
-        $esearch = strtolower(trim(($e['case_number'] ?? '') . ' ' . ($e['incident_type'] ?? '') . ' ' . $ref_label . ' referred escalated ' . ($e['complainant_name'] ?? '')));
-      ?>
-      <div class="card event-card-referred-resp sanction-card"
-           data-sanction-role="respondent"
-           data-sanction-type="case_referred"
-           data-sanction-status="referred"
-           data-sanction-search="<?= e($esearch) ?>">
-        <div class="card-body" style="padding:14px 18px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-            <div style="display:flex;align-items:flex-start;gap:12px">
-              <div style="font-size:22px;line-height:1;margin-top:2px"><?= $ref_icon ?></div>
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-                  <div style="font-size:14px;font-weight:700;color:var(--ink-900)"><?= $ref_label ?></div>
-                  <span class="event-tag et-warning">Action Required</span>
-                  <span class="role-pill rp-respondent">You are the respondent</span>
-                </div>
-                <div style="font-size:11px;font-family:var(--font-mono);color:var(--ink-400)">
-                  <?= e($e['case_number']) ?>&nbsp;·&nbsp;<?= e($e['incident_type']) ?>
-                  <?php if ($e['complainant_name']): ?>&nbsp;·&nbsp;Filed by <?= e($e['complainant_name']) ?><?php endif; ?>
-                </div>
-                <div style="margin-top:8px;font-size:12px;color:var(--rose-700);line-height:1.6;background:var(--rose-50);border:1px solid var(--rose-100);border-radius:var(--r-sm);padding:8px 10px">
-                  <?= $ref_desc ?> You may be contacted or summoned. Contact your barangay officer for guidance.
-                </div>
-              </div>
-            </div>
-            <div style="text-align:right;flex-shrink:0;white-space:nowrap">
-              <span class="chip ch-rose">Referred</span>
-              <div style="font-size:11px;color:var(--ink-400);margin-top:6px"><?= date('M j, Y', strtotime($e['event_date'])) ?></div>
-            </div>
-          </div>
-        </div>
-        <div class="card-foot">
-          <button class="act-btn" onclick="viewBlotter(<?= $e['blotter_id'] ?>)">View Case</button>
-        </div>
-      </div>
-      <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-
-    <?php if (!empty($ev_referred_comp)): ?>
-    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="referred-complainant" style="color:var(--teal-600)">
-      <span>📋 Cases You Filed — Referred to Authorities</span>
-    </div>
-    <div class="sanction-group" data-sanction-group="referred-complainant" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
-      <?php foreach ($ev_referred_comp as $e):
-        $ref = $referred_labels[$e['prescribed_action']] ?? ['⚖️','Case Referred','teal','This case has been referred to an external authority.'];
-        [$ref_icon, $ref_label, $ref_color, $ref_desc] = $ref;
-        $esearch = strtolower(trim(($e['case_number'] ?? '') . ' ' . ($e['incident_type'] ?? '') . ' ' . $ref_label . ' referred escalated ' . ($e['respondent_name'] ?? '')));
-      ?>
-      <div class="card event-card-referred-comp sanction-card"
-           data-sanction-role="complainant"
-           data-sanction-type="case_referred"
-           data-sanction-status="referred"
-           data-sanction-search="<?= e($esearch) ?>">
-        <div class="card-body" style="padding:14px 18px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-            <div style="display:flex;align-items:flex-start;gap:12px">
-              <div style="font-size:22px;line-height:1;margin-top:2px"><?= $ref_icon ?></div>
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-                  <div style="font-size:14px;font-weight:700;color:var(--ink-900)"><?= $ref_label ?></div>
-                  <span class="event-tag et-info">Update</span>
-                  <span class="role-pill rp-complainant">You filed this case</span>
-                </div>
-                <div style="font-size:11px;font-family:var(--font-mono);color:var(--ink-400)">
-                  <?= e($e['case_number']) ?>&nbsp;·&nbsp;<?= e($e['incident_type']) ?>
-                  <?php if ($e['respondent_name']): ?>&nbsp;·&nbsp;Against <?= e($e['respondent_name']) ?><?php endif; ?>
-                </div>
-                <div style="margin-top:8px;font-size:12px;color:var(--teal-700);line-height:1.6;background:var(--teal-50);border:1px solid var(--teal-100);border-radius:var(--r-sm);padding:8px 10px">
-                  Your case has been escalated beyond the barangay level. <?= $ref_desc ?>
-                  A barangay officer will update you on next steps.
-                </div>
-              </div>
-            </div>
-            <div style="text-align:right;flex-shrink:0;white-space:nowrap">
-              <span class="chip ch-teal">Escalated</span>
-              <div style="font-size:11px;color:var(--ink-400);margin-top:6px"><?= date('M j, Y', strtotime($e['event_date'])) ?></div>
-            </div>
-          </div>
-        </div>
-        <div class="card-foot">
-          <button class="act-btn" onclick="viewBlotter(<?= $e['blotter_id'] ?>)">View Case</button>
-        </div>
-      </div>
-      <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-
-    <?php if (!empty($ev_dismissed_comp)): ?>
-    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="dismissed-complainant" style="color:var(--ink-400)">
-      <span>📁 Dismissed Cases — Cases You Filed</span>
-    </div>
-    <div class="sanction-group" data-sanction-group="dismissed-complainant" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
-      <?php foreach ($ev_dismissed_comp as $e): ?>
-      <?php $esearch = strtolower(trim(($e['case_number'] ?? '') . ' ' . ($e['incident_type'] ?? '') . ' dismissed ' . ($e['respondent_name'] ?? ''))); ?>
-      <div class="card event-card-dismissed sanction-card"
-           data-sanction-role="complainant"
-           data-sanction-type="case_dismissed"
-           data-sanction-status="dismissed"
-           data-sanction-search="<?= e($esearch) ?>">
-        <div class="card-body" style="padding:14px 18px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-            <div style="display:flex;align-items:flex-start;gap:12px">
-              <div style="font-size:22px;line-height:1;margin-top:2px">🚫</div>
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-                  <div style="font-size:14px;font-weight:700;color:var(--ink-900)">Case Dismissed</div>
-                  <span class="event-tag et-neutral">Dismissed</span>
-                  <span class="role-pill rp-complainant">You filed this case</span>
-                </div>
-                <div style="font-size:11px;font-family:var(--font-mono);color:var(--ink-400)">
-                  <?= e($e['case_number']) ?>&nbsp;·&nbsp;<?= e($e['incident_type']) ?>
-                  <?php if ($e['respondent_name']): ?>&nbsp;·&nbsp;Against <?= e($e['respondent_name']) ?><?php endif; ?>
-                </div>
-                <?php $miss_count = (int)($e['complainant_missed'] ?? 0); ?>
-                <div style="margin-top:8px;font-size:12px;color:var(--ink-600);line-height:1.6;background:var(--surface-2);border:1px solid var(--ink-100);border-radius:var(--r-sm);padding:8px 10px">
-                  <?php if ($miss_count >= 2): ?>
-                    Your case was dismissed because you failed to appear at <?= $miss_count ?> scheduled mediation hearings.
-                    Under Sec. 412 of the Local Government Code, you are barred from filing the same case in court.
-                    Contact your barangay officer if you believe this is in error.
-                  <?php else: ?>
-                    This case was dismissed by the barangay officer. If you believe the dismissal is incorrect,
-                    you may request a review or request a Certificate to File Action to elevate to a higher body.
-                  <?php endif; ?>
-                </div>
-              </div>
-            </div>
-            <div style="text-align:right;flex-shrink:0;white-space:nowrap">
-              <span class="chip ch-slate">Dismissed</span>
-              <div style="font-size:11px;color:var(--ink-400);margin-top:6px"><?= date('M j, Y', strtotime($e['event_date'])) ?></div>
-            </div>
-          </div>
-        </div>
-        <div class="card-foot">
-          <button class="act-btn" onclick="viewBlotter(<?= $e['blotter_id'] ?>)">View Case</button>
-        </div>
-      </div>
-      <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-
-    <?php if (!empty($ev_dismissed_resp)): ?>
-    <div class="notices-subhdr sanctions-subhdr" data-sanction-group="dismissed-respondent" style="color:var(--green-700)">
-      <span>✅ Dismissed Cases — Against You (Resolved in Your Favor)</span>
-    </div>
-    <div class="sanction-group" data-sanction-group="dismissed-respondent" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
-      <?php foreach ($ev_dismissed_resp as $e): ?>
-      <?php $esearch = strtolower(trim(($e['case_number'] ?? '') . ' ' . ($e['incident_type'] ?? '') . ' dismissed ' . ($e['complainant_name'] ?? ''))); ?>
-      <div class="card sanction-card"
-           data-sanction-role="respondent"
-           data-sanction-type="case_dismissed"
-           data-sanction-status="dismissed"
-           data-sanction-search="<?= e($esearch) ?>"
-           style="border-left:4px solid var(--green-400);background:linear-gradient(135deg,rgba(240,253,244,.6) 0%,var(--white) 60%)">
-        <div class="card-body" style="padding:14px 18px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-            <div style="display:flex;align-items:flex-start;gap:12px">
-              <div style="font-size:22px;line-height:1;margin-top:2px">✅</div>
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-                  <div style="font-size:14px;font-weight:700;color:var(--ink-900)">Case Dismissed Against You</div>
-                  <span class="event-tag et-info">Good News</span>
-                  <span class="role-pill rp-respondent">Respondent</span>
-                </div>
-                <div style="font-size:11px;font-family:var(--font-mono);color:var(--ink-400)">
-                  <?= e($e['case_number']) ?>&nbsp;·&nbsp;<?= e($e['incident_type']) ?>
-                  <?php if ($e['complainant_name']): ?>&nbsp;·&nbsp;Filed by <?= e($e['complainant_name']) ?><?php endif; ?>
-                </div>
-                <div style="margin-top:8px;font-size:12px;color:var(--green-700);line-height:1.6;background:var(--green-50);border:1px solid var(--green-100);border-radius:var(--r-sm);padding:8px 10px">
-                  This case has been dismissed. No further action is required from you at this time.
-                  Keep this record for your reference in case the same matter is raised again.
-                </div>
-              </div>
-            </div>
-            <div style="text-align:right;flex-shrink:0;white-space:nowrap">
-              <span class="chip ch-emerald">Dismissed</span>
-              <div style="font-size:11px;color:var(--ink-400);margin-top:6px"><?= date('M j, Y', strtotime($e['event_date'])) ?></div>
-            </div>
-          </div>
-        </div>
-        <div class="card-foot">
-          <button class="act-btn" onclick="viewBlotter(<?= $e['blotter_id'] ?>)">View Case</button>
-        </div>
-      </div>
-      <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-
-    <div id="sanction-pager" class="card-foot" style="display:none;border:1px solid var(--surface-2);border-radius:var(--r-sm)"></div>
-
-  <?php endif; // no penalties/events ?>
-</div><!-- /panel-sanctions -->
-
-<!-- ══════════════════════════════════════════
-     PANEL 2: CASE NOTIFICATIONS
-══════════════════════════════════════════ -->
-<div id="panel-notices" class="ntab-panel">
-
-  <?php if (empty($notifications)): ?>
-    <div class="ntab-empty">
-      <div class="es-icon">🔔</div>
-      <div class="es-title">No notifications yet</div>
-      <div class="es-sub">Case updates from your barangay will appear here</div>
-    </div>
-
-  <?php else: ?>
-
-    <!-- Filter bar -->
-    <div class="notices-filter-bar">
-      <select id="notif-filter-role" onchange="filterNotifs(true)" style="width:auto;min-width:160px">
-        <option value="">All Roles</option>
-        <option value="complainant">As Complainant</option>
-        <option value="respondent">As Respondent</option>
-      </select>
-      <select id="notif-filter-type" onchange="filterNotifs(true)" style="width:auto;min-width:170px">
-        <option value="">All Types</option>
-        <option value="hearing_scheduled">Hearing Scheduled</option>
-        <option value="hearing_reminder">Hearing Reminder</option>
-        <option value="hearing_rescheduled">Hearing Rescheduled</option>
-        <option value="no_show_warning">No-Show Warning</option>
-        <option value="mediation_completed">Mediation Completed</option>
-        <option value="case_escalated">Case Escalated</option>
-        <option value="cfa_issued">CFA Issued</option>
-        <option value="case_dismissed">Case Dismissed</option>
-        <option value="general">General</option>
-      </select>
-      <select id="notif-filter-read" onchange="filterNotifs(true)" style="width:auto;min-width:140px">
-        <option value="">All Notices</option>
-        <option value="unread">Unread Only</option>
-        <option value="read">Read Only</option>
-      </select>
-      <button class="btn btn-outline btn-sm" onclick="clearNotifFilters()">✕ Clear</button>
-      <span id="notif-count" class="nf-count"></span>
-    </div>
-
-    <!-- No filter results -->
-    <div id="notif-no-results" style="display:none">
-      <div class="ntab-empty">
-        <div class="es-icon">🔍</div>
-        <div class="es-title">No notifications match</div>
-        <div class="es-sub">Try adjusting the filters above.</div>
-      </div>
-    </div>
-
-    <!-- Notifications list -->
-    <?php if (!empty($notifs_as_respondent)): ?>
-    <div class="notices-subhdr" id="subhdr-respondent" style="color:var(--rose-600)">
-      <span>⚠️ Notifications — You are the Respondent</span>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px" id="group-respondent">
-      <?php foreach ($notifs_as_respondent as $n):
-        [$chip, $icon, $type_lbl] = $notif_config[$n['notification_type']] ?? ['ch-slate','📄','Notice'];
-        $is_new       = ($n['status'] !== 'read' && $n['read_at'] === null);
-        $show_hearing = !empty($n['hearing_date']) && in_array($n['notification_type'], [
-            'hearing_scheduled','hearing_reminder','hearing_rescheduled',
-        ]);
-      ?>
-      <div class="card notif-card-respondent <?= $is_new ? 'notif-card-new' : '' ?>"
-           data-role="respondent"
-           data-type="<?= e($n['notification_type']) ?>"
-           data-read="<?= $n['status'] === 'read' ? 'read' : 'unread' ?>">
-        <div class="card-body" style="padding:16px 18px">
-
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px">
-            <div style="display:flex;align-items:flex-start;gap:12px">
-              <div style="font-size:22px;line-height:1;margin-top:2px"><?= $icon ?></div>
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
-                  <div style="font-size:14px;font-weight:700;color:var(--ink-900)"><?= e($n['subject'] ?: $type_lbl) ?></div>
-                  <span class="role-pill rp-respondent">Respondent</span>
-                  <?php if ($is_new): ?><span class="chip ch-amber" style="font-size:10px">New</span><?php endif; ?>
-                </div>
-                <?php if ($n['case_number']): ?>
-                <div style="font-size:11px;font-family:var(--font-mono);color:var(--ink-400)">
-                  <?= e($n['case_number']) ?>
-                  <?php if ($n['incident_type']): ?>&nbsp;·&nbsp;<?= e($n['incident_type']) ?><?php endif; ?>
-                </div>
-                <?php endif; ?>
-              </div>
-            </div>
-            <div style="text-align:right;flex-shrink:0">
-              <span class="chip <?= $chip ?>"><?= $type_lbl ?></span>
-              <div style="font-size:11px;color:var(--ink-400);margin-top:4px"><?= date('M j, Y', strtotime($n['created_at'])) ?></div>
-            </div>
-          </div>
-
-          <?php if ($n['message']): ?>
-          <div style="font-size:13px;color:var(--ink-600);line-height:1.7;padding:12px;background:rgba(254,242,242,.5);border:1px solid var(--rose-100);border-radius:var(--r-sm)">
-            <?= nl2br(e($n['message'])) ?>
-          </div>
-          <?php endif; ?>
-
-          <?php if ($show_hearing): ?>
-          <div class="hearing-callout hc-rose">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="1.5" y="2" width="11" height="10.5" rx="1.5"/><path d="M1.5 5.5h11M4.5 2V.5M9.5 2V.5"/></svg>
-            <span>
-              <?= date('D, F j, Y', strtotime($n['hearing_date'])) ?>
-              <?php if ($n['hearing_time']): ?>&nbsp;at&nbsp;<?= date('g:i A', strtotime($n['hearing_time'])) ?><?php endif; ?>
-              <?php if ($n['venue']): ?>&nbsp;·&nbsp;<?= e($n['venue']) ?><?php endif; ?>
-            </span>
-          </div>
-          <?php endif; ?>
-
-          <?php if (!empty($n['sent_at']) && !empty($n['channel'])): ?>
-          <div style="font-size:11px;color:var(--ink-400);margin-top:8px">
-            Sent <?= date('M j, Y g:i A', strtotime($n['sent_at'])) ?> via <?= e(str_replace(',',', ',$n['channel'])) ?>
-          </div>
-          <?php endif; ?>
-
-        </div>
-      </div>
-      <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-
-    <?php if (!empty($notifs_as_complainant)): ?>
-    <div class="notices-subhdr" id="subhdr-complainant" style="color:var(--teal-700)">
-      <span>📋 Notifications — You Filed This Case</span>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px" id="group-complainant">
-      <?php foreach ($notifs_as_complainant as $n):
-        [$chip, $icon, $type_lbl] = $notif_config[$n['notification_type']] ?? ['ch-slate','📄','Notice'];
-        $is_new       = ($n['status'] !== 'read' && $n['read_at'] === null);
-        $show_hearing = !empty($n['hearing_date']) && in_array($n['notification_type'], [
-            'hearing_scheduled','hearing_reminder','hearing_rescheduled',
-        ]);
-      ?>
-      <div class="card notif-card-complainant <?= $is_new ? 'notif-card-new' : '' ?>"
-           data-role="complainant"
-           data-type="<?= e($n['notification_type']) ?>"
-           data-read="<?= $n['status'] === 'read' ? 'read' : 'unread' ?>">
-        <div class="card-body" style="padding:16px 18px">
-
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px">
-            <div style="display:flex;align-items:flex-start;gap:12px">
-              <div style="font-size:22px;line-height:1;margin-top:2px"><?= $icon ?></div>
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
-                  <div style="font-size:14px;font-weight:700;color:var(--ink-900)"><?= e($n['subject'] ?: $type_lbl) ?></div>
-                  <span class="role-pill rp-complainant">Complainant</span>
-                  <?php if ($is_new): ?><span class="chip ch-amber" style="font-size:10px">New</span><?php endif; ?>
-                </div>
-                <?php if ($n['case_number']): ?>
-                <div style="font-size:11px;font-family:var(--font-mono);color:var(--ink-400)">
-                  <?= e($n['case_number']) ?>
-                  <?php if ($n['incident_type']): ?>&nbsp;·&nbsp;<?= e($n['incident_type']) ?><?php endif; ?>
-                </div>
-                <?php endif; ?>
-              </div>
-            </div>
-            <div style="text-align:right;flex-shrink:0">
-              <span class="chip <?= $chip ?>"><?= $type_lbl ?></span>
-              <div style="font-size:11px;color:var(--ink-400);margin-top:4px"><?= date('M j, Y', strtotime($n['created_at'])) ?></div>
-            </div>
-          </div>
-
-          <?php if ($n['message']): ?>
-          <div style="font-size:13px;color:var(--ink-600);line-height:1.7;padding:12px;background:var(--surface);border-radius:var(--r-sm)">
-            <?= nl2br(e($n['message'])) ?>
-          </div>
-          <?php endif; ?>
-
-          <?php if ($show_hearing): ?>
-          <div class="hearing-callout hc-teal">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="1.5" y="2" width="11" height="10.5" rx="1.5"/><path d="M1.5 5.5h11M4.5 2V.5M9.5 2V.5"/></svg>
-            <span>
-              <?= date('D, F j, Y', strtotime($n['hearing_date'])) ?>
-              <?php if ($n['hearing_time']): ?>&nbsp;at&nbsp;<?= date('g:i A', strtotime($n['hearing_time'])) ?><?php endif; ?>
-              <?php if ($n['venue']): ?>&nbsp;·&nbsp;<?= e($n['venue']) ?><?php endif; ?>
-            </span>
-          </div>
-          <?php endif; ?>
-
-          <?php if (!empty($n['sent_at']) && !empty($n['channel'])): ?>
-          <div style="font-size:11px;color:var(--ink-400);margin-top:8px">
-            Sent <?= date('M j, Y g:i A', strtotime($n['sent_at'])) ?> via <?= e(str_replace(',',', ',$n['channel'])) ?>
-          </div>
-          <?php endif; ?>
-
-        </div>
-      </div>
-      <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-
-    <div id="notif-pager" class="card-foot" style="display:none;border:1px solid var(--surface-2);border-radius:var(--r-sm)"></div>
-
-  <?php endif; // empty notifications ?>
-</div><!-- /panel-notices -->
-
-<?php endif; // has_any ?>
 
 <script>
-var sanctionPageSize = 8;
-var sanctionPage = 1;
-var notifPageSize = 8;
-var notifPage = 1;
+const SANCTION_ROWS = <?= json_encode(array_values($sanction_rows)) ?>;
+
+var sanctionPageSize = 10, sanctionPage = 1;
 
 function renderPager(elId, page, total, pageSize, fnName) {
   var el = document.getElementById(elId);
   if (!el) return;
   var pages = Math.max(1, Math.ceil(total / pageSize));
-  if (total <= pageSize) {
-    el.style.display = 'none';
-    el.innerHTML = '';
-    return;
-  }
+  if (total <= pageSize) { el.style.display = 'none'; el.innerHTML = ''; return; }
   page = Math.min(Math.max(1, page), pages);
   var start = ((page - 1) * pageSize) + 1;
   var end = Math.min(page * pageSize, total);
-  var first = Math.max(1, page - 2);
-  var last = Math.min(pages, page + 2);
+  var first = Math.max(1, page - 2), last = Math.min(pages, page + 2);
   var html = '<div class="pager"><span class="pager-info">Showing ' + start + '-' + end + ' of ' + total + '</span><div class="pager-btns">';
   if (page > 1) html += '<button type="button" class="btn btn-outline btn-sm" onclick="' + fnName + '(' + (page - 1) + ')">Prev</button>';
-  for (var i = first; i <= last; i++) {
-    html += '<button type="button" class="btn ' + (i === page ? 'btn-primary' : 'btn-outline') + ' btn-sm" onclick="' + fnName + '(' + i + ')">' + i + '</button>';
-  }
+  for (var i = first; i <= last; i++) html += '<button type="button" class="btn ' + (i === page ? 'btn-primary' : 'btn-outline') + ' btn-sm" onclick="' + fnName + '(' + i + ')">' + i + '</button>';
   if (page < pages) html += '<button type="button" class="btn btn-outline btn-sm" onclick="' + fnName + '(' + (page + 1) + ')">Next</button>';
   html += '</div></div>';
-  el.innerHTML = html;
-  el.style.display = '';
-}
-// ── Tab switching ─────────────────────────────────────────────
-function switchTab(name, btn) {
-  document.querySelectorAll('.ntab').forEach(function(t){ t.classList.remove('active'); });
-  document.querySelectorAll('.ntab-panel').forEach(function(p){ p.classList.remove('active'); });
-  btn.classList.add('active');
-  var panel = document.getElementById('panel-' + name);
-  if (panel) panel.classList.add('active');
+  el.innerHTML = html; el.style.display = '';
 }
 
-// ── Sanction filters ──────────────────────────────────────
 function filterSanctions(resetPage) {
   if (resetPage) sanctionPage = 1;
-
   var search = (document.getElementById('sanction-search')?.value || '').trim().toLowerCase();
   var role   = document.getElementById('sanction-filter-role')?.value || '';
   var type   = document.getElementById('sanction-filter-type')?.value || '';
-  var status = document.getElementById('sanction-filter-status')?.value || '';
-
-  var cards = document.querySelectorAll('#panel-sanctions .sanction-card');
+  var rows = document.querySelectorAll('#sanction-tbody .sanction-row');
   var matched = [];
-
-  cards.forEach(function(card) {
-    var matchSearch = !search || (card.dataset.sanctionSearch || '').includes(search);
-    var matchRole   = !role   || card.dataset.sanctionRole === role;
-    var matchType   = !type   || card.dataset.sanctionType === type;
-    var matchStatus = !status || card.dataset.sanctionStatus === status;
-    if (matchSearch && matchRole && matchType && matchStatus) matched.push(card);
+  rows.forEach(row => {
+    var m = (!search || (row.dataset.search||'').includes(search)) && (!role || row.dataset.role===role) && (!type || row.dataset.type===type);
+    if (m) matched.push(row);
   });
-
   var pages = Math.max(1, Math.ceil(matched.length / sanctionPageSize));
   sanctionPage = Math.min(Math.max(1, sanctionPage), pages);
-  var start = (sanctionPage - 1) * sanctionPageSize;
-  var end = start + sanctionPageSize;
-
-  cards.forEach(function(card) {
-    var idx = matched.indexOf(card);
-    var show = idx >= start && idx < end;
-    card.style.display = show ? '' : 'none';
-  });
-
-  document.querySelectorAll('#panel-sanctions .sanction-group').forEach(function(group) {
-    var anyVisible = Array.from(group.querySelectorAll('.sanction-card')).some(function(card) {
-      return card.style.display !== 'none';
-    });
-    group.style.display = anyVisible ? 'flex' : 'none';
-  });
-
-  document.querySelectorAll('#panel-sanctions .sanctions-subhdr').forEach(function(header) {
-    var group = document.querySelector('#panel-sanctions .sanction-group[data-sanction-group="' + header.dataset.sanctionGroup + '"]');
-    var anyVisible = group && group.style.display !== 'none';
-    header.style.display = anyVisible ? '' : 'none';
-  });
-
-  var noResults = document.getElementById('sanction-no-results');
-  if (noResults) noResults.style.display = (cards.length > 0 && matched.length === 0) ? '' : 'none';
+  var start = (sanctionPage-1)*sanctionPageSize, end = start+sanctionPageSize;
+  rows.forEach(row => { var idx = matched.indexOf(row); row.style.display = (idx>=start && idx<end) ? '' : 'none'; });
+  document.getElementById('sanction-no-results').style.display = (rows.length>0 && matched.length===0) ? '' : 'none';
   renderPager('sanction-pager', sanctionPage, matched.length, sanctionPageSize, 'changeSanctionPage');
-
   var countEl = document.getElementById('sanction-count');
-  if (countEl) {
-    var hasFilter = search || role || type || status;
-    countEl.textContent = hasFilter ? 'Showing ' + matched.length + ' of ' + cards.length : '';
-  }
+  var hasFilter = search || role || type;
+  countEl.textContent = hasFilter ? 'Showing ' + matched.length + ' of ' + rows.length : '';
 }
-
-function changeSanctionPage(page) {
-  sanctionPage = page;
-  filterSanctions(false);
-}
-
+function changeSanctionPage(p) { sanctionPage = p; filterSanctions(false); }
 function clearSanctionFilters() {
-  ['sanction-search','sanction-filter-role','sanction-filter-type','sanction-filter-status'].forEach(function(id){
-    var el = document.getElementById(id);
-    if (el) el.value = '';
-  });
+  ['sanction-search','sanction-filter-role','sanction-filter-type'].forEach(id => { var el = document.getElementById(id); if (el) el.value=''; });
   filterSanctions(true);
 }
 
-// ── Notification filters ──────────────────────────────────────
-function filterNotifs(resetPage) {
-  if (resetPage) notifPage = 1;
+const SEVERITY_CHIP = { rose:'ch-rose', amber:'ch-amber', teal:'ch-teal', slate:'ch-slate' };
 
-  var role  = document.getElementById('notif-filter-role')?.value  || '';
-  var type  = document.getElementById('notif-filter-type')?.value  || '';
-  var read  = document.getElementById('notif-filter-read')?.value  || '';
+function viewSanctionDetail(i) {
+  const r = SANCTION_ROWS[i];
+  document.getElementById('detail-title').textContent = r.title;
+  document.getElementById('detail-chips').innerHTML =
+    '<span class="chip ' + (SEVERITY_CHIP[r.severity]||'ch-slate') + '">' + r.type_label + '</span>' +
+    '<span class="role-pill ' + (r.role==='respondent'?'rp-respondent':'rp-complainant') + '">' + r.role_label + '</span>' +
+    '<span class="chip ' + r.status_chip + '">' + r.status_label + '</span>';
+  document.getElementById('detail-case').textContent = (r.case_number||'—') + (r.incident_type ? ' · ' + r.incident_type : '');
 
-  var cards  = document.querySelectorAll('#panel-notices [data-role]');
-  var matched = [];
+  const cpRow = document.getElementById('detail-counterpart-row');
+  if (r.counterpart) {
+    cpRow.style.display = '';
+    document.getElementById('detail-counterpart-label').textContent = r.counterpart_label;
+    document.getElementById('detail-counterpart').textContent = r.counterpart;
+  } else cpRow.style.display = 'none';
 
-  cards.forEach(function(card) {
-    var matchRole = !role || card.dataset.role === role;
-    var matchType = !type || card.dataset.type === type;
-    var matchRead = !read || card.dataset.read === read;
-    if (matchRole && matchType && matchRead) matched.push(card);
-  });
+  const amtRow = document.getElementById('detail-amount-row');
+  if (r.amount !== null) {
+    amtRow.style.display = '';
+    document.getElementById('detail-amount').textContent = '₱' + Number(r.amount).toLocaleString(undefined,{minimumFractionDigits:2}) + (r.hours ? ' + ' + r.hours + ' hrs community service' : '');
+  } else amtRow.style.display = 'none';
 
-  var pages = Math.max(1, Math.ceil(matched.length / notifPageSize));
-  notifPage = Math.min(Math.max(1, notifPage), pages);
-  var start = (notifPage - 1) * notifPageSize;
-  var end = start + notifPageSize;
+  const dueRow = document.getElementById('detail-due-row');
+  if (r.due_date) { dueRow.style.display = ''; document.getElementById('detail-due').textContent = new Date(r.due_date).toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric'}); }
+  else dueRow.style.display = 'none';
 
-  cards.forEach(function(card) {
-    var idx = matched.indexOf(card);
-    var show = idx >= start && idx < end;
-    card.style.display = show ? '' : 'none';
-  });
+  document.getElementById('detail-date').textContent = r.date ? new Date(r.date).toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric'}) : '—';
+  document.getElementById('detail-text').textContent = r.detail || '';
+  document.getElementById('detail-hearing-row').style.display = 'none';
 
-  // Show/hide subheaders based on visible cards in each group
-  ['respondent','complainant'].forEach(function(r) {
-    var grp  = document.getElementById('group-' + r);
-    var shdr = document.getElementById('subhdr-' + r);
-    if (!grp || !shdr) return;
-    var anyVisible = Array.from(grp.querySelectorAll('[data-role]')).some(function(c){ return c.style.display !== 'none'; });
-    grp.style.display  = anyVisible ? 'flex' : 'none';
-    shdr.style.display = anyVisible ? '' : 'none';
-  });
+  const btn = document.getElementById('detail-view-case-btn');
+  if (r.blotter_id) { btn.style.display = ''; btn.onclick = () => { closeModal('modal-detail'); viewBlotter(r.blotter_id); }; }
+  else btn.style.display = 'none';
 
-  var noResults = document.getElementById('notif-no-results');
-  if (noResults) noResults.style.display = (cards.length > 0 && matched.length === 0) ? '' : 'none';
-  renderPager('notif-pager', notifPage, matched.length, notifPageSize, 'changeNotifPage');
-
-  var countEl = document.getElementById('notif-count');
-  if (countEl) {
-    var hasFilter = role || type || read;
-    countEl.textContent = hasFilter ? 'Showing ' + matched.length + ' of ' + cards.length : '';
-  }
+  openModal('modal-detail');
 }
 
-function changeNotifPage(page) {
-  notifPage = page;
-  filterNotifs(false);
-}
-
-function clearNotifFilters() {
-  ['notif-filter-role','notif-filter-type','notif-filter-read'].forEach(function(id){
-    var el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  filterNotifs(true);
-}
 
 filterSanctions(false);
-filterNotifs(false);
 </script>
+<?php endif; ?>

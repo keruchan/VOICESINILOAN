@@ -891,7 +891,7 @@ try {
             <td style="font-size:12px;color:var(--ink-600)"><?= e($b['incident_type']) ?></td>
             <td><span class="chip <?= ['minor'=>'ch-emerald','moderate'=>'ch-amber','serious'=>'ch-rose','critical'=>'ch-violet'][$b['violation_level']] ?? 'ch-slate' ?>"><?= ucfirst($b['violation_level']) ?></span></td>
             <td><span class="chip <?= ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-navy','resolved'=>'ch-emerald','closed'=>'ch-slate','escalated'=>'ch-rose','transferred'=>'ch-slate'][$b['status']] ?? 'ch-slate' ?>"><?= ucwords(str_replace('_',' ',$b['status'])) ?></span></td>
-            <td><button class="act-btn" onclick="viewBlotter(<?= $b['id'] ?>)">View</button></td>
+            <td><button class="act-btn" onclick="viewBlotter(<?= $b['id'] ?>)">View Case</button></td>
           </tr>
         <?php endforeach; endif; ?>
         </tbody>

@@ -323,8 +323,8 @@ usort($all_types, fn($a,$b)=>($type_this[$b]??0)-($type_this[$a]??0));
 <div class="alert alert-amber mb22">
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--amber-600)" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11" r=".5" fill="currentColor"/></svg>
   <div class="alert-text">
-    <strong><?= $stats['pending_approval'] ?> community account(s) awaiting approval</strong>
-    <span>New registrations need your review. <a href="?page=users&filter=pending" style="color:var(--amber-600);font-weight:600">Review now →</a></span>
+    <strong><?= $stats['pending_approval'] ?> community account(s) unverified</strong>
+    <span>Awaiting email verification — they'll self-activate once verified, or you can activate manually. <a href="?page=users&filter=pending" style="color:var(--amber-600);font-weight:600">View →</a></span>
   </div>
 </div>
 <?php endif; ?>
@@ -652,7 +652,7 @@ usort($all_types, fn($a,$b)=>($type_this[$b]??0)-($type_this[$a]??0));
     <?php if (!empty($pending_users)): ?>
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Pending Approvals</div>
+        <div class="card-title">Unverified Accounts</div>
         <a href="?page=users&filter=pending" class="act-btn">View all</a>
       </div>
       <div class="card-body" style="padding:0 18px">
@@ -666,7 +666,7 @@ usort($all_types, fn($a,$b)=>($type_this[$b]??0)-($type_this[$a]??0));
             <div style="font-size:11px;color:var(--ink-400)"><?= htmlspecialchars($pu['barangay_name']??'—') ?> · <?= date('M j', strtotime($pu['created_at'])) ?></div>
           </div>
           <div style="display:flex;gap:4px">
-            <button class="btn btn-success btn-xs" onclick="approveUser(<?= (int)$pu['id'] ?>, this)">Approve</button>
+            <button class="btn btn-success btn-xs" onclick="approveUser(<?= (int)$pu['id'] ?>, this)" title="Manually activate (bypasses email verification)">Activate</button>
             <button class="act-btn danger btn-xs" onclick="suspendUser(<?= (int)$pu['id'] ?>, this)">Reject</button>
           </div>
         </div>

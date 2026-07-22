@@ -16,9 +16,9 @@
 // Update these values to match your MySQL setup.
 define('DB_HOST',    'localhost');
 define('DB_PORT',    '3306');
-define('DB_NAME',    'voice2_db');      // your database name
-define('DB_USER',    'root');           // your MySQL username
-define('DB_PASS',    '');    
+define('DB_NAME',    'u763192172_siniloanvoice');      // your database name
+define('DB_USER',    'u763192172_siniloanvoice');           // your MySQL username
+define('DB_PASS',    'Siniloanvoice2!');    
 define('DB_CHARSET', 'utf8mb4');
 
 // ── PDO CONNECTION ────────────────────────────────────────────
@@ -49,10 +49,12 @@ try {
 // ── SESSION CONFIGURATION ─────────────────────────────────────
 // Start a session if one hasn't been started yet.
 if (session_status() === PHP_SESSION_NONE) {
+    $is_https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
     session_set_cookie_params([
         'lifetime' => 0,           // session cookie (expires on browser close)
         'path'     => '/',
-        'secure'   => false,       // set to true when using HTTPS
+        'secure'   => $is_https,   // only send the cookie over HTTPS when the site is served over HTTPS
         'httponly' => true,        // prevent JS access to session cookie
         'samesite' => 'Strict',
     ]);
@@ -106,4 +108,19 @@ function jsonResponse(bool $success, string $message, array $data = []): void {
     header('Content-Type: application/json');
     echo json_encode(array_merge(['success' => $success, 'message' => $message], $data));
     exit;
+}
+
+// ── HELPER: Finalize amicable settlements past their 10-day repudiation
+// window (Sec. 416, RA 7160). No party repudiated in time, so the
+// settlement now has the force of a final court judgment.
+function finalize_due_settlements(PDO $pdo, ?int $barangay_id = null): void {
+    try {
+        $sql = "UPDATE amicable_settlements SET status='final', finalized_at=NOW(), updated_at=NOW()
+                WHERE status='active' AND repudiation_deadline < CURDATE()";
+        if ($barangay_id) {
+            $pdo->prepare($sql . " AND barangay_id = ?")->execute([$barangay_id]);
+        } else {
+            $pdo->exec($sql);
+        }
+    } catch (PDOException $e) {}
 }

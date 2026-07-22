@@ -4,7 +4,7 @@ require_once '../connection/auth.php';
 guardRole('barangay');
 $user = currentUser();  // keys: id, name, role, barangay_id
 
-$allowed = ['dashboard','blotter-management','violator-monitor','mediation','user-management','sanctions-book','records-archive','settings'];
+$allowed = ['dashboard','blotter-management','violator-monitor','mediation','user-management','sanctions-book','case-finder','records-archive','settings'];
 $page    = (isset($_GET['page']) && in_array($_GET['page'], $allowed)) ? $_GET['page'] : 'dashboard';
 
 $titles = [
@@ -14,6 +14,7 @@ $titles = [
     'mediation'          => 'Mediation',
     'user-management'     => 'User Management',
     'sanctions-book'     => 'Sanctions Book',
+    'case-finder'        => 'Smart Case Finder',
     'records-archive'    => 'Records Archive',
     'settings'           => 'Settings',
 ];
@@ -53,12 +54,12 @@ try {
     )->fetchColumn();
 } catch (PDOException $e) {}
 
-$bgy_init = strtoupper(implode('', array_slice(
-    array_map(fn($w) => $w[0],
-        array_filter(explode(' ', $bgy['name']), fn($w) => strlen($w) > 2)
-    ), 0, 3
-)));
-if (!$bgy_init) $bgy_init = 'BG';
+$bgy_init = '';
+foreach (preg_split('/[\s\-]+/', trim((string)$bgy['name'])) as $w) {
+    if (preg_match('/[A-Za-z]/', $w, $m)) $bgy_init .= strtoupper($m[0]);
+}
+$bgy_init = substr($bgy_init, 0, 2);
+if ($bgy_init === '') $bgy_init = 'BG';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -75,11 +76,11 @@ if (!$bgy_init) $bgy_init = 'BG';
 
   <!-- ── SIDEBAR ── -->
   <aside class="sidebar">
-    <div class="sb-brand">
+    <a href="../index.php" class="sb-brand sb-brand-link" title="Back to landing page">
       <div class="sb-pill"><div class="sb-dot"></div><span>Barangay Portal</span></div>
       <div class="sb-name">VOICE</div>
       <div class="sb-sub">Blotter Management System</div>
-    </div>
+    </a>
 
     <div class="bgy-chip">
       <div class="bgy-av"><?= $bgy_init ?></div>
@@ -128,6 +129,11 @@ if (!$bgy_init) $bgy_init = 'BG';
         <span class="nav-label">Sanctions Book</span>
       </a>
 
+      <a class="nav-a <?= $page === 'case-finder' ? 'active' : '' ?>" href="?page=case-finder">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>
+        <span class="nav-label">Smart Case Finder</span>
+      </a>
+
       <a class="nav-a <?= $page === 'records-archive' ? 'active' : '' ?>" href="?page=records-archive">
         <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12v2H2zM3.5 6v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V6"/><path d="M6.5 9h3"/></svg>
         <span class="nav-label">Records Archive</span>
@@ -156,12 +162,33 @@ if (!$bgy_init) $bgy_init = 'BG';
   <div class="main">
     <div class="topbar">
       <div class="topbar-left">
+        <button class="hamburger" type="button" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span></button>
         <span class="topbar-title"><?= e($titles[$page]) ?></span>
         <span class="topbar-badge"><?= e($bgy['name']) ?></span>
       </div>
       <div class="topbar-actions">
-        <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-blotter')">+ New Blotter</button>
-        <a href="../connection/logout.php" class="btn btn-outline btn-sm">Logout</a>
+        <div class="notif-bell-wrap">
+          <button class="notif-bell-btn" type="button" onclick="toggleNotifDropdown()" aria-label="Notifications">
+            <svg width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9.5 3c-2.5 0-4.2 2-4.2 4.5v2.3c0 .7-.3 1.4-.8 1.9l-.7.8c-.5.5-.1 1.4.6 1.4h10.2c.7 0 1.1-.9.6-1.4l-.7-.8c-.5-.5-.8-1.2-.8-1.9V7.5C13.7 5 12 3 9.5 3z"/>
+              <path d="M7.8 15.5a1.7 1.7 0 0 0 3.4 0"/>
+            </svg>
+            <span class="notif-bell-badge" id="notif-bell-badge" style="display:none">0</span>
+          </button>
+          <div class="notif-dropdown" id="notif-dropdown">
+            <div class="notif-dropdown-hdr">
+              <span>Notifications</span>
+              <button type="button" onclick="markAllNotifRead()">Mark all read</button>
+            </div>
+            <div class="notif-dropdown-list" id="notif-dropdown-list">
+              <div class="notif-dd-empty">Loading…</div>
+            </div>
+          </div>
+        </div>
+        <a href="?page=settings" class="topbar-user-chip">
+          <div class="topbar-user-av"><?= strtoupper(substr($user['name'] ?? 'BG', 0, 2)) ?></div>
+          <span class="topbar-user-name"><?= e($user['name'] ?? 'Officer') ?></span>
+        </a>
       </div>
     </div>
 
@@ -172,6 +199,24 @@ if (!$bgy_init) $bgy_init = 'BG';
 </div>
 
 <!-- ══ GLOBAL: New Blotter Modal ══ -->
+<!-- GLOBAL: Export Preview Modal -->
+<div class="modal-overlay" id="modal-export-preview">
+  <div class="modal modal-lg" style="max-width:920px;width:95vw;max-height:92vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
+    <div class="modal-hdr" style="flex-shrink:0">
+      <span class="modal-title" id="export-preview-title">Export Preview</span>
+      <button class="modal-x" onclick="closeModal('modal-export-preview')">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="export-preview-body" style="overflow:auto;padding:18px 20px;max-height:68vh"></div>
+    <div class="modal-foot" style="flex-shrink:0;justify-content:space-between">
+      <button class="btn btn-ghost" onclick="closeModal('modal-export-preview')">Close</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="btn btn-outline" type="button" onclick="printExportPreview()">Print / Save PDF</button>
+        <a class="btn btn-primary" id="export-preview-download" href="#">Download CSV</a>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-new-blotter">
   <div class="modal modal-lg" style="max-width:720px;max-height:90vh;overflow-y:auto">
     <div class="modal-hdr" style="position:sticky;top:0;background:var(--surface);z-index:10;border-bottom:1px solid var(--ink-100)">
@@ -440,6 +485,64 @@ document.getElementById('panel-overlay').addEventListener('click', e => {
 /* loading */
 function loading(s) { document.getElementById('loading-overlay').classList.toggle('show', s); }
 
+let exportPreviewHtml = '';
+function epEsc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function showExportPreview(url, fallbackTitle) {
+  const modal = document.getElementById('modal-export-preview');
+  const title = document.getElementById('export-preview-title');
+  const body = document.getElementById('export-preview-body');
+  const dl = document.getElementById('export-preview-download');
+  if (!modal || !body || !dl) {
+    window.location = url;
+    return;
+  }
+  const previewUrl = new URL(url, window.location.href);
+  previewUrl.searchParams.set('preview', '1');
+  title.textContent = fallbackTitle || 'Export Preview';
+  body.innerHTML = '<div style="text-align:center;padding:36px;color:var(--ink-400)">Preparing preview...</div>';
+  exportPreviewHtml = '';
+  dl.removeAttribute('href');
+  openModal('modal-export-preview');
+  fetch(previewUrl.toString(), { headers: { 'Accept': 'application/json' } })
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(data => {
+      title.textContent = data.title || fallbackTitle || 'Export Preview';
+      dl.href = data.download_url || url;
+      const columns = data.columns || [];
+      const rows = data.rows || [];
+      const head = columns.map(c => '<th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--ink-100);font-size:11px;white-space:nowrap">' + epEsc(c) + '</th>').join('');
+      const bodyRows = rows.length
+        ? rows.map(row => '<tr>' + row.map(cell => '<td style="padding:8px 10px;border-bottom:1px solid var(--ink-50);font-size:12px;vertical-align:top;white-space:nowrap">' + epEsc(cell || '-') + '</td>').join('') + '</tr>').join('')
+        : '<tr><td colspan="' + Math.max(columns.length, 1) + '" style="padding:28px;text-align:center;color:var(--ink-300)">No records to export.</td></tr>';
+      exportPreviewHtml =
+        '<h2 style="font-family:Arial,sans-serif;margin:0 0 10px">' + epEsc(data.title || fallbackTitle || 'Export Preview') + '</h2>' +
+        '<p style="font-family:Arial,sans-serif;margin:0 0 14px;color:#555">Showing ' + epEsc(data.preview_count || rows.length) + ' of ' + epEsc(data.total ?? rows.length) + ' record(s).</p>' +
+        '<table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:12px"><thead><tr>' + head + '</tr></thead><tbody>' + bodyRows + '</tbody></table>';
+      body.innerHTML =
+        '<div style="font-size:13px;color:var(--ink-500);margin-bottom:12px">Previewing ' + epEsc(data.preview_count || rows.length) + ' of ' + epEsc(data.total ?? rows.length) + ' record(s). Review the sample below before downloading.</div>' +
+        '<div class="tbl-wrap" style="border:1px solid var(--ink-100);border-radius:var(--r-md);max-height:48vh;overflow:auto"><table><thead><tr>' + head + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div>';
+    })
+    .catch(() => {
+      exportPreviewHtml = '';
+      body.innerHTML = '<div class="empty-state"><div class="es-title">Preview unavailable</div><div class="es-sub">You can still download the CSV export.</div></div>';
+      dl.href = url;
+    });
+}
+function printExportPreview() {
+  if (!exportPreviewHtml) return showToast('Preview is still loading.', 'error');
+  const w = window.open('', '_blank', 'width=1000,height=800');
+  if (!w) return showToast('Allow pop-ups to print or save PDF.', 'error');
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Export Preview</title><style>@page{margin:16mm}body{font-family:Arial,sans-serif;color:#111}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}th{background:#f3f4f6}</style></head><body>' + exportPreviewHtml + '</body></html>');
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 400);
+}
+
 /* toast */
 function showToast(msg, type) {
   type = type || '';
@@ -453,6 +556,90 @@ function showToast(msg, type) {
     t.style.opacity = '0';
     t.style.transform = 'translateX(-50%) translateY(10px)';
   }, 3200);
+}
+
+/* ── liveFilter: instant AJAX search/filter for list pages ──────────────────
+   Wires a filter <form> + result container so typing/selecting refreshes the
+   results in place (debounced text input, immediate on select change) instead
+   of a full page reload via a Filter/Search submit button. */
+function liveFilter(opts) {
+  const form = document.querySelector(opts.form);
+  const result = document.querySelector(opts.result);
+  if (!form || !result) return null;
+  let timer;
+  const debounceMs = opts.debounceMs || 300;
+  const pageParam = opts.pageParam || 'pg';
+
+  function buildParams(overrides) {
+    const params = new URLSearchParams(new FormData(form));
+    if (overrides) Object.keys(overrides).forEach(k => {
+      if (overrides[k] === null || overrides[k] === '') params.delete(k);
+      else params.set(k, overrides[k]);
+    });
+    return params;
+  }
+  function applyToForm(overrides) {
+    if (!overrides) return;
+    Object.keys(overrides).forEach(k => {
+      const el = form.elements.namedItem(k);
+      if (el) el.value = overrides[k];
+    });
+  }
+  function refresh(overrides) {
+    applyToForm(overrides);
+    const params = buildParams(overrides);
+    result.style.opacity = '0.45';
+    fetch(opts.endpoint + '?' + params.toString())
+      .then(r => r.text())
+      .then(html => {
+        result.innerHTML = html;
+        result.style.opacity = '';
+        const url = new URL(window.location.href);
+        url.search = params.toString();
+        history.replaceState(null, '', url);
+        if (opts.afterRender) opts.afterRender();
+      })
+      .catch(() => { result.style.opacity = ''; showToast('Search failed. Try again.', 'error'); });
+  }
+
+  form.addEventListener('submit', e => e.preventDefault());
+  form.querySelectorAll('input[type="search"], input[type="text"]').forEach(el => {
+    el.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => refresh({ [pageParam]: 1 }), debounceMs); });
+  });
+  form.querySelectorAll('select').forEach(el => {
+    el.addEventListener('change', () => refresh({ [pageParam]: 1 }));
+  });
+
+  function handleNavClick(e) {
+    const a = e.target.closest('a[data-lf]');
+    if (!a) return;
+    e.preventDefault();
+    const u = new URL(a.href, window.location.href);
+    const overrides = {};
+    u.searchParams.forEach((v, k) => { overrides[k] = v; });
+    if (!(pageParam in overrides)) overrides[pageParam] = 1;
+    const nav = a.closest('[data-lf-group]');
+    if (nav) nav.querySelectorAll('a').forEach(x => x.classList.remove('active'));
+    a.classList.add('active');
+    refresh(overrides);
+  }
+  result.addEventListener('click', handleNavClick);
+  if (opts.navSelectors) opts.navSelectors.forEach(sel => {
+    document.querySelectorAll(sel).forEach(el => el.addEventListener('click', handleNavClick));
+  });
+
+  if (opts.clearBtn) {
+    const btn = document.querySelector(opts.clearBtn);
+    if (btn) btn.addEventListener('click', e => {
+      e.preventDefault();
+      form.querySelectorAll('input[type="search"],input[type="text"]').forEach(el => el.value = '');
+      form.querySelectorAll('select').forEach(el => el.selectedIndex = 0);
+      const resetOverrides = Object.assign({}, opts.resetOverrides || {}, { [pageParam]: 1 });
+      refresh(resetOverrides);
+    });
+  }
+
+  return { refresh };
 }
 
 /* chip maps */
@@ -492,12 +679,12 @@ function renderPanel(b) {
   }).join('');
 
   const attachmentsHtml = (b.attachments && b.attachments.length > 0) ?
-    '<div class="card mb16"><div class="card-hdr"><span class="card-title">📎 Attachments (' + b.attachments.length + ')</span></div><div class="card-body" style="padding:12px 16px"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px">' +
+    '<div class="card mb16 case-view-readonly"><div class="card-hdr"><span class="card-title">Attachments (' + b.attachments.length + ')</span></div><div class="card-body" style="padding:12px 16px"><div class="case-view-attachments">' +
     b.attachments.map(function(att) {
       const imgPath = '../' + att.file_path;
-      return '<div style="border-radius:var(--r-md);overflow:hidden;border:1px solid var(--ink-100);cursor:pointer" onclick="viewAttachment(\'' + imgPath + '\',\'' + att.original_name + '\')">' +
-        '<img src="' + imgPath + '" alt="' + att.original_name + '" style="width:100%;height:100px;object-fit:cover;display:block" onerror="this.style.opacity=\'0.3\'">' +
-        '<div style="font-size:10px;color:var(--ink-500);padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--surface-2)">' + att.original_name + '</div></div>';
+      return '<div class="case-view-attachment" onclick="viewAttachment(\'' + imgPath + '\',\'' + att.original_name + '\')">' +
+        '<img src="' + imgPath + '" alt="' + att.original_name + '" onerror="this.style.opacity=\'0.3\'">' +
+        '<div class="case-view-attachment-name">' + att.original_name + '</div></div>';
     }).join('') + '</div></div></div>' : '';
 
   // Respondent linked badge HTML (shown if currently linked to a registered user)
@@ -526,24 +713,28 @@ function renderPanel(b) {
   window._currentBlotter = b;
 
   document.getElementById('panel-body').innerHTML =
-    '<div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center">' +
+    '<div class="case-view-top">' +
       levelChip(b.violation_level) + ' ' + statusChip(b.status) +
-      '<button class="btn btn-outline btn-sm" style="margin-left:auto;border-color:var(--navy-200);color:var(--navy-700)" onclick="openCaseReport()">&#x1F4C4; Case Report</button>' +
+      '<button class="btn btn-outline btn-sm case-view-push" style="border-color:var(--navy-200);color:var(--navy-700)" onclick="openCaseReport()">Case Report</button>' +
     '</div>' +
 
-    // ── Complainant (read-only) ──
-    '<div class="card mb16">' +
-      '<div class="card-hdr"><span class="card-title">👤 Complainant</span></div>' +
+    // Case Information (read-only)
+    '<div class="card mb16 case-view-card">' +
+      '<div class="card-hdr"><span class="card-title">Case Information</span></div>' +
       '<div class="card-body" style="padding:12px 16px">' +
-        '<div class="dr"><span class="dr-lbl">Name</span><span class="dr-val">' + pEsc(b.complainant_name||'—') + '</span></div>' +
+        '<div class="dr"><span class="dr-lbl">Complainant</span><span class="dr-val">' + pEsc(b.complainant_name||'—') + '</span></div>' +
         '<div class="dr"><span class="dr-lbl">Contact</span><span class="dr-val">' + pEsc(b.complainant_contact||'—') + '</span></div>' +
+        '<div class="dr"><span class="dr-lbl">Respondent</span><span class="dr-val">' + pEsc(b.respondent_name||'Not identified') + '</span></div>' +
+        '<div class="dr"><span class="dr-lbl">Resp. Contact</span><span class="dr-val">' + pEsc(b.respondent_contact||'—') + '</span></div>' +
         '<div class="dr"><span class="dr-lbl">Location</span><span class="dr-val">' + pEsc(b.incident_location||'—') + '</span></div>' +
+        '<div class="dr"><span class="dr-lbl">Incident Date</span><span class="dr-val">' + ((b.incident_date||'').substring(0,10)||'—') + '</span></div>' +
+        '<div class="dr"><span class="dr-lbl">Prescribed Action</span><span class="dr-val">' + ucw((b.prescribed_action||'pending').replace(/_/g,' ')) + '</span></div>' +
         '<div class="dr"><span class="dr-lbl">Filed</span><span class="dr-val">' + ((b.created_at||'').substring(0,10)||'—') + '</span></div>' +
       '</div>' +
     '</div>' +
 
-    // ── Respondent / Violator (editable) ──
-    '<div class="card mb16" style="border-left:3px solid var(--amber-400)">' +
+    // Respondent / Violator (editable)
+    '<div class="card mb16 case-view-edit">' +
       '<div class="card-hdr">' +
         '<span class="card-title">⚠️ Respondent / Violator</span>' +
         '<span style="font-size:11px;color:var(--amber-600);font-weight:600">Editable</span>' +
@@ -579,16 +770,16 @@ function renderPanel(b) {
     '</div>' +
 
     // ── Narrative ──
-    '<div class="card mb16">' +
-      '<div class="card-hdr"><span class="card-title">📝 Narrative</span></div>' +
-      '<div class="card-body" style="padding:12px 16px"><p style="font-size:13px;color:var(--ink-700);line-height:1.75;white-space:pre-wrap">' + pEsc(b.narrative||'No narrative recorded.') + '</p></div>' +
+    '<div class="card mb16 case-view-readonly">' +
+      '<div class="card-hdr"><span class="card-title">Narrative</span></div>' +
+      '<div class="card-body" style="padding:12px 16px"><p class="case-view-text">' + pEsc(b.narrative||'No narrative recorded.') + '</p></div>' +
     '</div>' +
 
     attachmentsHtml +
 
     // ── Update Case ──
-    '<div class="card mb16">' +
-      '<div class="card-hdr"><span class="card-title">🔄 Update Case</span></div>' +
+    '<div class="card mb16 case-view-edit">' +
+      '<div class="card-hdr"><span class="card-title">Update Case</span></div>' +
       '<div class="card-body" style="padding:12px 16px">' +
         '<div class="fr2">' +
           '<div class="fg"><label>Status</label><select id="p-status">' + statusOpts + '</select></div>' +
@@ -705,6 +896,7 @@ function pRespSelect(idx) {
   window._panelRespLinked = true;
   document.getElementById('panel-resp-name').value              = u.name;
   document.getElementById('panel-resp-linked-name').textContent = u.name;
+  if (u.contact) document.getElementById('panel-resp-contact').value = u.contact;
   document.getElementById('panel-resp-badge').style.display     = 'flex';
   document.getElementById('panel-resp-name').style.display      = 'none';
   pRespHideDropdown();
@@ -1041,6 +1233,7 @@ function nbSelect(idx) {
   nbRespUserId = u.id;
   document.getElementById('nb-resp-name').value              = u.name;
   document.getElementById('nb-resp-linked-name').textContent = u.name;
+  if (u.contact) document.getElementById('nb-resp-contact').value = u.contact;
   document.getElementById('nb-resp-badge').style.display     = 'flex';
   document.getElementById('nb-resp-name').style.display      = 'none';
   nbLinked = true;
@@ -1176,6 +1369,7 @@ function nbCompSelect(idx) {
   nbCompUserId = u.id;
   document.getElementById('nb-comp-name').value              = u.name;
   document.getElementById('nb-comp-linked-name').textContent = u.name;
+  if (u.contact) document.getElementById('nb-comp-contact').value = u.contact;
   document.getElementById('nb-comp-badge').style.display     = 'flex';
   document.getElementById('nb-comp-name').style.display      = 'none';
   nbCompLinked = true;
@@ -1216,6 +1410,211 @@ function nbEsc(s) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
   });
 }
+
+// ══════════════════════════════════════════════════════════════
+// Notification bell — live insights (non-dismissible) + discrete
+// stored notifications (read/unread, read more, delete, routing)
+// ══════════════════════════════════════════════════════════════
+const INSIGHT_ICONS = {
+  doc: '📄', warning: '⚠️', bgy: '📅', alert: '🚨',
+};
+
+let bnotifOpen = false;
+let bnotifOffset = 0;
+const BNOTIF_PAGE = 8;
+
+function toggleNotifDropdown() {
+  bnotifOpen = !bnotifOpen;
+  document.getElementById('notif-dropdown').classList.toggle('open', bnotifOpen);
+  if (bnotifOpen) loadNotifDropdown(true);
+}
+document.addEventListener('click', function (e) {
+  const wrap = document.querySelector('.notif-bell-wrap');
+  if (bnotifOpen && wrap && !wrap.contains(e.target)) {
+    bnotifOpen = false;
+    document.getElementById('notif-dropdown').classList.remove('open');
+  }
+});
+
+function notifTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr.replace(' ', 'T'));
+  const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (diff < 5) return 'Just now';
+  if (diff < 60) return diff + 's ago';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+  return d.toLocaleDateString('en-PH', { month:'short', day:'numeric' });
+}
+
+function notifFullTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr.replace(' ', 'T'));
+  return d.toLocaleString('en-PH', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+}
+
+function refreshNotifBadge() {
+  fetch('ajax/notifications_action.php?action=count')
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) return;
+      const badge = document.getElementById('notif-bell-badge');
+      if (d.unread > 0) { badge.textContent = d.unread > 99 ? '99+' : d.unread; badge.style.display = ''; }
+      else badge.style.display = 'none';
+    }).catch(() => {});
+}
+
+function loadNotifDropdown(reset) {
+  if (reset) bnotifOffset = 0;
+  const list = document.getElementById('notif-dropdown-list');
+  fetch('ajax/notifications_action.php?action=list&offset=' + bnotifOffset + '&limit=' + BNOTIF_PAGE)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) return;
+      if (reset) list.innerHTML = '';
+      const existingMore = document.getElementById('bnotif-load-more');
+      if (existingMore) existingMore.remove();
+
+      if (reset && d.insights && d.insights.length) {
+        let html = '<div class="notif-section-lbl">Needs Attention</div>';
+        d.insights.forEach(function (n) {
+          html += '<a class="notif-item insight" href="' + n.link + '" onclick="bnotifOpen=false;document.getElementById(\'notif-dropdown\').classList.remove(\'open\')">' +
+            '<div class="notif-item-icon" style="color:' + n.color + '">' + (INSIGHT_ICONS[n.icon] || '📄') + '</div>' +
+            '<div class="notif-item-body"><div class="notif-item-subject">' + nbEsc(n.title) + '</div><div class="notif-item-msg">' + nbEsc(n.sub) + '</div></div>' +
+            '</a>';
+        });
+        list.insertAdjacentHTML('beforeend', html);
+      }
+
+      if (reset && (!d.notifications.length) && (!d.insights || !d.insights.length)) {
+        list.insertAdjacentHTML('beforeend', '<div class="notif-dd-empty">All caught up! No notifications right now.</div>');
+      }
+
+      if (d.notifications.length) {
+        if (reset) list.insertAdjacentHTML('beforeend', '<div class="notif-section-lbl">Recent Notifications</div>');
+        d.notifications.forEach(function (n) { list.insertAdjacentHTML('beforeend', renderBNotifItem(n)); });
+      }
+
+      bnotifOffset += d.notifications.length;
+      if (d.has_more) {
+        list.insertAdjacentHTML('beforeend', '<button type="button" id="bnotif-load-more" class="notif-load-more-btn" onclick="loadNotifDropdown(false)">Load more</button>');
+      }
+    })
+    .catch(() => { if (reset) list.innerHTML = '<div class="notif-dd-empty">Could not load notifications.</div>'; });
+}
+
+function renderBNotifItem(n) {
+  const isUnread = String(n.is_unread ?? (n.status !== 'read' ? 1 : 0)) === '1';
+  const msg = n.message || '';
+  const isLong = msg.length > 90;
+  const shortMsg = isLong ? msg.substring(0, 90) + '...' : msg;
+  const viewLink = n.link_blotter_id
+    ? '<span class="notif-item-viewcase" onclick="goToBNotif(' + n.id + ',' + n.link_blotter_id + ')">View Case -></span>'
+    : (n.link_page ? '<span class="notif-item-viewcase" onclick="goToBNotifPage(' + n.id + ',\'' + n.link_page + '\')">View -></span>' : '');
+  return `
+  <div class="notif-item ${isUnread ? 'unread' : ''}" data-id="${n.id}" data-unread="${isUnread ? '1' : '0'}">
+    <div class="notif-item-body">
+      <div class="notif-item-subject" onclick="markBNotifRead(${n.id})">${nbEsc(n.subject || 'Notice')}</div>
+      <div class="notif-item-msg">
+        <span class="notif-msg-text" data-full="${nbEsc(msg)}" data-short="${nbEsc(shortMsg)}">${nbEsc(shortMsg)}</span>
+        ${isLong ? `<span class="notif-item-readmore" onclick="toggleBReadMore(this, ${n.id})">Read more</span>` : ''}
+      </div>
+      <div class="notif-item-foot">
+        <span class="notif-item-time" title="${nbEsc(notifFullTime(n.created_at))}">${n.case_number ? nbEsc(n.case_number) + ' - ' : ''}${notifTimeAgo(n.created_at)}</span>
+        <span class="notif-item-actions">
+          ${viewLink}
+          <span class="notif-read-toggle" onclick="toggleBNotifRead(${n.id})">${isUnread ? 'Mark read' : 'Mark unread'}</span>
+        </span>
+      </div>
+    </div>
+    <button type="button" class="notif-item-del" onclick="deleteBNotif(event, ${n.id})" title="Delete notification">x</button>
+  </div>`;
+}
+
+function toggleBReadMore(el, id) {
+  const msgSpan = el.previousElementSibling;
+  const expanded = el.dataset.expanded === '1';
+  msgSpan.textContent = expanded ? msgSpan.dataset.short : msgSpan.dataset.full;
+  el.textContent = expanded ? 'Read more' : 'Show less';
+  el.dataset.expanded = expanded ? '0' : '1';
+  markBNotifRead(id);
+}
+
+function setBNotifReadState(id, isUnread) {
+  const el = document.querySelector('.notif-item[data-id="' + id + '"]');
+  if (!el) return;
+  el.classList.toggle('unread', isUnread);
+  el.dataset.unread = isUnread ? '1' : '0';
+  const toggle = el.querySelector('.notif-read-toggle');
+  if (toggle) toggle.textContent = isUnread ? 'Mark read' : 'Mark unread';
+}
+
+function markBNotifRead(id) {
+  const el = document.querySelector('.notif-item[data-id="' + id + '"]');
+  if (!el || el.dataset.unread !== '1') return;
+  setBNotifReadState(id, false);
+  fetch('ajax/notifications_action.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'mark_read', id }) })
+    .then(() => refreshNotifBadge()).catch(() => { setBNotifReadState(id, true); showToast('Could not mark as read.', 'error'); });
+}
+
+function markBNotifUnread(id) {
+  const el = document.querySelector('.notif-item[data-id="' + id + '"]');
+  if (!el || el.dataset.unread === '1') return;
+  setBNotifReadState(id, true);
+  fetch('ajax/notifications_action.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'mark_unread', id }) })
+    .then(() => refreshNotifBadge()).catch(() => { setBNotifReadState(id, false); showToast('Could not mark as unread.', 'error'); });
+}
+
+function toggleBNotifRead(id) {
+  const el = document.querySelector('.notif-item[data-id="' + id + '"]');
+  if (!el) return;
+  if (el.dataset.unread === '1') markBNotifRead(id);
+  else markBNotifUnread(id);
+}
+
+function markAllNotifRead() {
+  fetch('ajax/notifications_action.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'mark_all_read' }) })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) return;
+      document.querySelectorAll('.notif-item:not(.insight)').forEach(el => { el.classList.remove('unread'); el.dataset.unread = '0'; const t = el.querySelector('.notif-read-toggle'); if (t) t.textContent = 'Mark unread'; });
+      refreshNotifBadge();
+      showToast('All notifications marked as read.', 'success');
+    }).catch(() => {});
+}
+
+function deleteBNotif(evt, id) {
+  evt.stopPropagation();
+  if (!confirm('Delete this notification? This cannot be undone.')) return;
+  fetch('ajax/notifications_action.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id }) })
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) {
+        const el = document.querySelector('.notif-item[data-id="' + id + '"]');
+        if (el) el.remove();
+        refreshNotifBadge();
+        const list = document.getElementById('notif-dropdown-list');
+        if (list && !list.querySelector('.notif-item:not(.insight)') && !list.querySelector('.notif-item.insight')) {
+          list.innerHTML = '<div class="notif-dd-empty">All caught up! No notifications right now.</div>';
+        }
+      } else showToast(d.message, 'error');
+    }).catch(() => showToast('Request failed.', 'error'));
+}
+
+function goToBNotif(id, blotterId) {
+  markBNotifRead(id);
+  bnotifOpen = false;
+  document.getElementById('notif-dropdown').classList.remove('open');
+  viewBlotter(blotterId);
+}
+function goToBNotifPage(id, page) {
+  markBNotifRead(id);
+  window.location.href = '?page=' + page;
+}
+
+refreshNotifBadge();
+setInterval(refreshNotifBadge, 60000);
 </script>
 
 <style>
@@ -1225,5 +1624,12 @@ function nbEsc(s) {
 .nb-comp-item:last-child { border-bottom: none !important; }
 .nb-comp-item:hover      { background: var(--green-50, #f0fdf4) !important; }
 </style>
+<div class="sb-overlay" onclick="toggleSidebar()"></div>
+<script>
+function toggleSidebar(){
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.querySelector('.sb-overlay').classList.toggle('show');
+}
+</script>
 </body>
 </html>

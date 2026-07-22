@@ -50,7 +50,7 @@ try {
 
     // Recording officer name
     if (!empty($b['filed_by_user_id'])) {
-        $off = $pdo->prepare("SELECT name FROM users WHERE id = ? LIMIT 1");
+        $off = $pdo->prepare("SELECT full_name FROM users WHERE id = ? LIMIT 1");
         $off->execute([$b['filed_by_user_id']]);
         $b['filed_by_name'] = $off->fetchColumn() ?: null;
     } else {
@@ -60,5 +60,5 @@ try {
     echo json_encode(['success'=>true,'message'=>'OK','data'=>$b]);
 } catch (PDOException $e) {
     error_log('get_blotter.php: ' . $e->getMessage());
-    echo json_encode(['success'=>false,'message'=>'Database error: ' . $e->getMessage()]);
+    echo json_encode(['success'=>false,'message'=>'Could not load the case. Please try again.']);
 }

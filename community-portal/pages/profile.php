@@ -33,12 +33,11 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['_action'])){
 }
 
 // Stats
-$stats=['filed'=>0,'resolved'=>0,'violations'=>0,'pending_notices'=>0];
+$stats=['filed'=>0,'resolved'=>0,'violations'=>0];
 try {
     $stats['filed']           = (int)$pdo->query("SELECT COUNT(*) FROM blotters WHERE complainant_user_id=$uid")->fetchColumn();
     $stats['resolved']        = (int)$pdo->query("SELECT COUNT(*) FROM blotters WHERE complainant_user_id=$uid AND status IN ('resolved','closed')")->fetchColumn();
     $stats['violations']      = (int)$pdo->query("SELECT COUNT(*) FROM violations WHERE user_id=$uid")->fetchColumn();
-    $stats['pending_notices'] = (int)$pdo->query("SELECT COUNT(*) FROM notices WHERE recipient_user_id=$uid AND acknowledged_at IS NULL")->fetchColumn();
 } catch(PDOException $e){}
 ?>
 
@@ -114,7 +113,6 @@ try {
           ['Reports Filed',   'filed',           'ch-teal'],
           ['Resolved Cases',  'resolved',        'ch-green'],
           ['Cases vs. Me',    'violations',      'ch-rose'],
-          ['Unread Notices',  'pending_notices', 'ch-amber'],
         ] as [$lbl,$key,$ch]): ?>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--surface-2)">
           <span style="font-size:13px;color:var(--ink-600)"><?= $lbl ?></span>
@@ -136,7 +134,7 @@ try {
     <div class="card">
       <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
         <a href="?page=file-report" class="btn btn-primary" style="justify-content:flex-start">📝 File a Report</a>
-        <a href="?page=notices"     class="btn btn-outline" style="justify-content:flex-start">🔔 View Notices</a>
+        <a href="?page=sanctions"   class="btn btn-outline" style="justify-content:flex-start">View Sanctions</a>
         <a href="../connection/logout.php" class="btn btn-danger" style="justify-content:flex-start">🚪 Sign Out</a>
       </div>
     </div>

@@ -92,7 +92,7 @@ if ($action === 'new_blotter') {
 
     } catch (PDOException $e) {
         error_log('blotter_action new_blotter: ' . $e->getMessage());
-        echo json_encode(['success' => false, 'message' => 'DB error: ' . $e->getMessage()]);
+        echo json_encode(['success' => false, 'message' => 'Something went wrong while filing the blotter. Please try again.']);
     }
     exit;
 }
@@ -115,7 +115,8 @@ if ($action === 'update_status') {
         $existing = $check->fetch(PDO::FETCH_ASSOC);
         if (!$existing) { echo json_encode(['success'=>false,'message'=>'Blotter not found or access denied.']); exit; }
     } catch (PDOException $e) {
-        echo json_encode(['success'=>false,'message'=>'DB error: '.$e->getMessage()]); exit;
+        error_log('blotter_action update_status (lookup): ' . $e->getMessage());
+        echo json_encode(['success'=>false,'message'=>'Could not load the case. Please try again.']); exit;
     }
 
     $derived_status = $prescribed_action ? autoStatus($prescribed_action) : null;
@@ -166,10 +167,11 @@ if ($action === 'update_status') {
                 echo json_encode(['success'=>true,'message'=>'Case updated (add remarks column for full support).','new_status'=>$final_status]);
                 exit;
             } catch (PDOException $e2) {
-                echo json_encode(['success'=>false,'message'=>'DB error: '.$e2->getMessage()]); exit;
+                error_log('blotter_action update_status (retry): ' . $e2->getMessage());
+                echo json_encode(['success'=>false,'message'=>'Could not update the case. Please try again.']); exit;
             }
         }
-        echo json_encode(['success'=>false,'message'=>'DB error: '.$e->getMessage()]); exit;
+        echo json_encode(['success'=>false,'message'=>'Could not update the case. Please try again.']); exit;
     }
     exit;
 }
@@ -240,7 +242,7 @@ if ($action === 'update_respondent') {
 
     } catch (PDOException $e) {
         error_log('blotter_action update_respondent: ' . $e->getMessage());
-        echo json_encode(['success' => false, 'message' => 'DB error: ' . $e->getMessage()]);
+        echo json_encode(['success' => false, 'message' => 'Could not save respondent details. Please try again.']);
     }
     exit;
 }

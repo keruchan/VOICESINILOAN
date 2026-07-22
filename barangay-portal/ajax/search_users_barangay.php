@@ -22,21 +22,26 @@ if (strlen($q) < 2) {
 try {
     // Search community users only — officers don't report other officers
     $stmt = $pdo->prepare("
-        SELECT id, full_name
+        SELECT id, full_name, email, contact_number, address, birth_date
         FROM users
-        WHERE full_name LIKE ?
+        WHERE (full_name LIKE ? OR email LIKE ? OR contact_number LIKE ?)
           AND role NOT IN ('barangay', 'admin', 'superadmin')
         ORDER BY full_name ASC
         LIMIT 8
     ");
-    $stmt->execute(['%' . $q . '%']);
+    $like = '%' . $q . '%';
+    $stmt->execute([$like, $like, $like]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     echo json_encode([
         'success' => true,
         'results' => array_map(fn($r) => [
-            'id'   => (int)$r['id'],
-            'name' => $r['full_name'],
+            'id'      => (int)$r['id'],
+            'name'    => $r['full_name'],
+            'email'   => $r['email'] ?? '',
+            'contact' => $r['contact_number'] ?? '',
+            'address' => $r['address'] ?? '',
+            'birth'   => $r['birth_date'] ?? '',
         ], $rows),
     ]);
 } catch (PDOException $e) {

@@ -3,9 +3,9 @@
  * login.php
  * ─────────────────────────────────────────────────────────────
  * Handles login for all user roles:
- *   - community  → community-portal/index.html
- *   - barangay   → barangay-portal/index.html
- *   - superadmin → superadmin-portal/index.html
+ *   - community  → community-portal/index.php
+ *   - barangay   → barangay-portal/index.php
+ *   - superadmin → superadmin-portal/index.php
  *
  * GET  → show login form
  * POST → validate credentials, set session, redirect
@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             $stmt = $pdo->prepare("
-                SELECT id, full_name, email, password_hash, role, barangay_id, is_active
+                SELECT id, full_name, email, first_name, password_hash, role, barangay_id, is_active, email_verified_at
                 FROM users
                 WHERE email = ?
                 LIMIT 1
@@ -40,7 +40,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($user && password_verify($password, $user['password_hash'])) {
                 if (!$user['is_active']) {
-                    $error = 'Your account is pending verification by the barangay. Please wait for approval.';
+                    if ($user['role'] === 'community' && $user['email_verified_at'] === null) {
+                        // Never verified their email yet — the account was never activated.
+                        $error = 'unverified:' . $user['email'];
+                    } else {
+                        // Was active before (or is a staff account) but has been deactivated.
+                        $error = 'Your account has been deactivated. Please contact your barangay hall.';
+                    }
                 } else {
                     // Regenerate session ID to prevent session fixation
                     session_regenerate_id(true);
@@ -82,7 +88,7 @@ function redirectByRole(string $role): void {
             redirect('../superadmin-portal/index.php');
             break;
         default:
-            redirect('../index.html');
+            redirect('../index.php');
     }
 }
 ?>
@@ -116,6 +122,16 @@ function redirectByRole(string $role): void {
       justify-content: space-between;
     }
     .brand { margin-bottom: auto; }
+    .brand-link { display: inline-block; color: inherit; text-decoration: none; margin-bottom: 22px; transition: opacity 0.12s; }
+    .brand-link:hover { opacity: 0.86; }
+    .brand-logo { display: inline-flex; align-items: center; gap: 12px; }
+    .brand-logo-mark {
+      width: 42px; height: 42px; border-radius: 8px; background: #fff;
+      color: var(--blue-800); display: flex; align-items: center; justify-content: center;
+      font-family: 'DM Serif Display', serif; font-size: 24px; font-weight: 700;
+    }
+    .brand-logo-title { font-family: 'DM Serif Display', serif; font-size: 25px; line-height: 1; color: #fff; }
+    .brand-logo-sub { font-size: 10px; color: rgba(255,255,255,0.55); letter-spacing: 0.12em; text-transform: uppercase; margin-top: 4px; }
     .brand-eye { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--blue-400); margin-bottom: 10px; }
     .brand-name { font-family: 'DM Serif Display', serif; font-size: 32px; line-height: 1.2; color: #fff; font-style: italic; }
     .brand-tagline { font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 8px; line-height: 1.6; }
@@ -182,12 +198,21 @@ function redirectByRole(string $role): void {
   <!-- Left Branding Panel -->
   <div class="left-panel">
     <div class="brand">
+      <a href="../index.php" class="brand-link" aria-label="Go back to VOICE landing page">
+        <div class="brand-logo">
+          <div class="brand-logo-mark">V</div>
+          <div>
+            <div class="brand-logo-title">VOICE</div>
+            <div class="brand-logo-sub">Siniloan, Laguna</div>
+          </div>
+        </div>
+      </a>
       <div class="brand-eye">VOICE System</div>
       <div class="brand-name">Barangay<br>Blotter<br>System</div>
       <div class="brand-tagline">A unified platform for barangay blotter management, mediation scheduling, and community safety reporting.</div>
     </div>
     <div class="left-links">
-      <a href="../index.html" class="left-link">← Back to Home</a>
+      <a href="../index.php" class="left-link">← Back to Home</a>
       <a href="register.php" class="left-link">Create a community account</a>
     </div>
   </div>
@@ -197,7 +222,21 @@ function redirectByRole(string $role): void {
     <div class="form-title">Welcome back</div>
     <div class="form-subtitle">Sign in to continue to your portal</div>
 
-    <?php if ($error): ?>
+    <?php if ($error && str_starts_with($error, 'unverified:')): ?>
+      <?php $unverified_email = substr($error, strlen('unverified:')); ?>
+    <div class="error-box" style="flex-direction:column;align-items:stretch;gap:10px">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;margin-top:1px"><circle cx="7.5" cy="7.5" r="6"/><path d="M7.5 4.5v4"/><circle cx="7.5" cy="10.5" r=".5" fill="currentColor"/></svg>
+        <span>Please verify your email address before logging in. Check your inbox (and spam folder) for the verification link we sent you.</span>
+      </div>
+      <form method="POST" action="resend_verification.php">
+        <input type="hidden" name="email" value="<?= e($unverified_email) ?>">
+        <button type="submit" style="width:100%;padding:8px;background:none;border:1px solid var(--rose-400);color:var(--rose-600);border-radius:6px;font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer">
+          Resend Verification Email
+        </button>
+      </form>
+    </div>
+    <?php elseif ($error): ?>
     <div class="error-box">
       <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7.5" cy="7.5" r="6"/><path d="M7.5 4.5v4"/><circle cx="7.5" cy="10.5" r=".5" fill="currentColor"/></svg>
       <?= e($error) ?>

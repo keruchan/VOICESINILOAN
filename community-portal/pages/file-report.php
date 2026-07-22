@@ -1,11 +1,6 @@
 
 <?php
 
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-ini_set('log_errors', 1);
-ini_set('error_log', dirname(__FILE__) . '/php-errors.log');
-
 // pages/file-report.php
 $uid = (int)$user['id'];
 $bid = (int)$user['barangay_id'];
@@ -119,6 +114,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$new_id) {
                 throw new PDOException("Failed to retrieve inserted record ID");
             }
+
+            // Notify this barangay's officer(s) that a new report needs review
+            try {
+                $officers = $pdo->prepare("SELECT id FROM users WHERE barangay_id=? AND role='barangay' AND is_active=1");
+                $officers->execute([$bid]);
+                $officer_ids = $officers->fetchAll(PDO::FETCH_COLUMN);
+                $notif_stmt = $pdo->prepare("
+                    INSERT INTO system_notifications
+                      (recipient_user_id, portal, type, subject, message, link_page, link_blotter_id, status, created_at)
+                    VALUES (?, 'barangay', 'new_report', ?, ?, 'blotter-management', ?, 'unread', NOW())
+                ");
+                $notif_subject = "New Report Filed — $case_no";
+                $notif_message = "$cn filed a new report ($inc) for review. Please assess and set the prescribed action.";
+                foreach ($officer_ids as $officer_id) {
+                    $notif_stmt->execute([$officer_id, $notif_subject, $notif_message, $new_id]);
+                }
+            } catch (PDOException $ex) { error_log('[file-report notify officers] ' . $ex->getMessage()); }
 
             // Handle file attachments
             $attach_count = 0;
@@ -273,8 +285,8 @@ $severity_info = [
 $inc_types = array_keys($severity_map);
 
 // Barangay center coords for map — fetch from barangays table if available
-$bgy_lat = 14.5995; // fallback: Manila
-$bgy_lng = 120.9842;
+$bgy_lat = 14.4228; // fallback: Siniloan, Laguna town center
+$bgy_lng = 121.4447;
 try {
     $bgy_row = $pdo->prepare("SELECT lat, lng FROM barangays WHERE id=? LIMIT 1");
     $bgy_row->execute([$bid]);
@@ -335,23 +347,47 @@ try {
 </div>
 <?php endif; ?>
 
-<!-- Report type toggle -->
-<div style="display:flex;gap:10px;margin-bottom:22px">
-  <button type="button" id="btn-person"   onclick="setType('person')"   class="btn btn-primary"  style="flex:1;justify-content:center;border-radius:var(--r-lg)">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="5.5" r="2.5"/><path d="M2 14.5c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
-    Report a Person
-  </button>
-  <button type="button" id="btn-incident" onclick="setType('incident')" class="btn btn-outline" style="flex:1;justify-content:center;border-radius:var(--r-lg)">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11.5" r=".5" fill="currentColor"/></svg>
-    Report an Incident
-  </button>
-</div>
+<?php $initial_report_type = (($_POST['report_type'] ?? 'person') === 'incident') ? 'incident' : 'person'; ?>
 
 <form method="POST" id="report-form" enctype="multipart/form-data">
-  <input type="hidden" name="report_type"        id="report_type"        value="person">
+  <input type="hidden" name="report_type"        id="report_type"        value="<?= e($initial_report_type) ?>">
   <input type="hidden" name="respondent_user_id" id="respondent_user_id" value="<?= e($_POST['respondent_user_id'] ?? '') ?>">
   <input type="hidden" name="incident_lat"       id="incident_lat"       value="<?= e($_POST['incident_lat']  ?? '') ?>">
   <input type="hidden" name="incident_lng"       id="incident_lng"       value="<?= e($_POST['incident_lng']  ?? '') ?>">
+
+  <div class="report-type-card mb16" aria-label="Report type">
+    <div class="report-type-head">
+      <div>
+        <div class="report-type-kicker">Choose report type</div>
+        <div class="report-type-title">What are you filing?</div>
+      </div>
+      <span class="report-type-note">This only changes the fields shown below.</span>
+    </div>
+
+    <div class="report-type-grid">
+      <button type="button" id="btn-person" onclick="setType('person')" class="report-type-option">
+        <span class="report-type-icon">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="6" r="3"/><path d="M3 16c0-3.2 2.7-5.6 6-5.6s6 2.4 6 5.6"/></svg>
+        </span>
+        <span class="report-type-copy">
+          <strong>Report a Person</strong>
+          <small>Use this when you know who is involved or responsible.</small>
+        </span>
+        <span class="report-type-check">Select</span>
+      </button>
+
+      <button type="button" id="btn-incident" onclick="setType('incident')" class="report-type-option">
+        <span class="report-type-icon">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="9" r="7"/><path d="M9 5.5v4"/><path d="M9 13h.01"/></svg>
+        </span>
+        <span class="report-type-copy">
+          <strong>Report an Incident</strong>
+          <small>Use this when the concern is an event or situation.</small>
+        </span>
+        <span class="report-type-check">Select</span>
+      </button>
+    </div>
+  </div>
 
   <div class="g21">
     <!-- ── LEFT COLUMN ── -->
@@ -431,10 +467,15 @@ try {
 
       <!-- Incident details -->
       <div class="card mb16">
-        <div class="card-hdr"><span class="card-title">📋 Incident Details</span></div>
+        <div class="card-hdr">
+          <div>
+            <span class="card-title">Incident Details</span>
+            <div class="card-sub">Classify the report and describe where it happened.</div>
+          </div>
+        </div>
         <div class="card-body">
 
-          <div class="fr2">
+          <div class="incident-basics">
             <div class="fg">
               <label>Incident Type <span class="req">*</span></label>
               <select name="incident_type_sel" id="incident-type-sel"
@@ -444,10 +485,12 @@ try {
                   <option value="<?= e($t) ?>" <?= (($_POST['incident_type_sel'] ?? '') === $t) ? 'selected' : '' ?>><?= e($t) ?></option>
                 <?php endforeach; ?>
               </select>
+              <div class="field-hint">Choose the closest match. Use Other only when none of the options fit.</div>
             </div>
             <div class="fg">
               <label>Incident Date <span class="req">*</span></label>
               <input type="date" name="incident_date" max="<?= date('Y-m-d') ?>" value="<?= e($_POST['incident_date'] ?? date('Y-m-d')) ?>">
+              <div class="field-hint">Future dates are not accepted.</div>
             </div>
           </div>
 
@@ -461,20 +504,17 @@ try {
           </div>
 
           <!-- Auto-severity indicator -->
-          <!-- <input type="hidden" name="violation_level" id="violation-level-input" value="<?= e($_POST['violation_level'] ?? 'minor') ?>">
-          <div id="severity-card" style="display:none;border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;border:1px solid;transition:all .2s">
-            <div style="font-size:10px;font-weight:700;color:var(--ink-400);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">Auto-assigned Severity Level</div>
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-              <div style="display:flex;align-items:center;gap:8px">
-                <span id="sev-emoji" style="font-size:18px;line-height:1"></span>
-                <div>
-                  <div id="sev-label" style="font-size:15px;font-weight:700;line-height:1.2"></div>
-                  <div id="sev-desc"  style="font-size:11px;color:var(--ink-500);margin-top:2px;line-height:1.4"></div>
-                </div>
+          <input type="hidden" id="violation-level-input" value="<?= e($_POST['violation_level'] ?? 'minor') ?>">
+          <div id="severity-card" class="severity-preview" style="display:none">
+            <div class="severity-kicker">Suggested priority</div>
+            <div class="severity-row">
+              <span id="sev-emoji" class="severity-dot"></span>
+              <div>
+                <div id="sev-label" class="severity-label"></div>
+                <div id="sev-desc" class="severity-desc"></div>
               </div>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--ink-300)" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11.5" r=".5" fill="currentColor"/></svg>
             </div>
-          </div> -->
+          </div>
 
           <!-- ── INCIDENT LOCATION ── -->
           <fieldset style="border:1px solid var(--ink-100);border-radius:var(--r-lg);padding:14px 14px 10px;margin-bottom:16px">
@@ -653,6 +693,163 @@ try {
 
 <!-- ══════════ STYLES ══════════ -->
 <style>
+.report-type-card {
+  background:var(--white);
+  border:1px solid var(--ink-100);
+  border-radius:var(--r-lg);
+  box-shadow:var(--shadow-sm);
+  padding:16px;
+}
+.report-type-head {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
+}
+.report-type-kicker {
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--teal-600);
+}
+.report-type-title {
+  font-size:15px;
+  font-weight:700;
+  color:var(--ink-900);
+  margin-top:2px;
+}
+.report-type-note {
+  font-size:11px;
+  color:var(--ink-400);
+  white-space:nowrap;
+  padding-top:2px;
+}
+.report-type-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+.report-type-option {
+  width:100%;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  gap:12px;
+  text-align:left;
+  border:1px solid var(--ink-100);
+  background:var(--surface);
+  border-radius:var(--r-md);
+  padding:13px 14px;
+  cursor:pointer;
+  font-family:inherit;
+  color:var(--ink-700);
+  transition:border-color .14s,background .14s,box-shadow .14s,transform .14s;
+}
+.report-type-option:hover {
+  border-color:var(--teal-200);
+  background:var(--teal-50);
+}
+.report-type-option.active {
+  border-color:var(--teal-500);
+  background:linear-gradient(0deg,rgba(20,145,155,.08),rgba(20,145,155,.08)),var(--white);
+  box-shadow:0 0 0 3px rgba(20,145,155,.11);
+}
+.report-type-icon {
+  width:38px;
+  height:38px;
+  border-radius:var(--r-sm);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:var(--white);
+  color:var(--ink-400);
+  border:1px solid var(--ink-100);
+  flex-shrink:0;
+}
+.report-type-option.active .report-type-icon {
+  background:var(--teal-600);
+  color:var(--white);
+  border-color:var(--teal-600);
+}
+.report-type-copy {
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.report-type-copy strong {
+  font-size:13px;
+  color:var(--ink-900);
+  line-height:1.25;
+}
+.report-type-copy small {
+  font-size:11px;
+  color:var(--ink-500);
+  line-height:1.45;
+}
+.report-type-check {
+  font-size:10px;
+  font-weight:800;
+  color:var(--ink-300);
+  border:1px solid var(--ink-100);
+  border-radius:999px;
+  padding:3px 8px;
+  background:var(--white);
+  white-space:nowrap;
+}
+.report-type-option.active .report-type-check {
+  color:var(--white);
+  background:var(--teal-600);
+  border-color:var(--teal-600);
+}
+.incident-basics {
+  display:grid;
+  grid-template-columns:minmax(0,1.35fr) minmax(180px,.65fr);
+  gap:12px;
+}
+.field-hint {
+  font-size:11px;
+  color:var(--ink-400);
+  margin-top:5px;
+  line-height:1.45;
+}
+.severity-preview {
+  border:1px solid var(--ink-100);
+  border-radius:var(--r-md);
+  padding:11px 13px;
+  margin-bottom:16px;
+  transition:border-color .2s,background .2s;
+}
+.severity-kicker {
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--ink-400);
+  margin-bottom:6px;
+}
+.severity-row {
+  display:flex;
+  align-items:center;
+  gap:9px;
+}
+.severity-dot {
+  font-size:18px;
+  line-height:1;
+}
+.severity-label {
+  font-size:14px;
+  font-weight:800;
+  line-height:1.2;
+}
+.severity-desc {
+  font-size:11px;
+  color:var(--ink-500);
+  margin-top:2px;
+  line-height:1.45;
+}
 #upload-zone:hover  { border-color:var(--green-400);background:var(--green-50); }
 #upload-zone.drag   { border-color:var(--green-500);background:var(--green-50); }
 .prev-wrap { display:flex;flex-wrap:wrap;gap:8px;padding-top:4px; }
@@ -690,6 +887,14 @@ try {
 
 /* Map wrap slide-in */
 #map-wrap { animation: fadeSlideDown .2s ease; }
+@media(max-width:720px) {
+  .report-type-head { flex-direction:column; gap:4px; }
+  .report-type-note { white-space:normal; }
+  .report-type-grid,
+  .incident-basics { grid-template-columns:1fr; }
+  .report-type-option { grid-template-columns:auto minmax(0,1fr); }
+  .report-type-check { grid-column:2; justify-self:flex-start; }
+}
 </style>
 
 <!-- ══════════ SCRIPTS ══════════ -->
@@ -754,16 +959,22 @@ function setType(type) {
   const card = document.getElementById('respondent-card');
   const btnP = document.getElementById('btn-person');
   const btnI = document.getElementById('btn-incident');
-  const fix  = b => { b.style.flex='1'; b.style.justifyContent='center'; b.style.borderRadius='var(--r-lg)'; };
   if (type === 'person') {
     card.style.display = '';
-    btnP.className = 'btn btn-primary'; btnI.className = 'btn btn-outline';
+    btnP.classList.add('active');
+    btnI.classList.remove('active');
   } else {
     card.style.display = 'none';
-    btnI.className = 'btn btn-primary'; btnP.className = 'btn btn-outline';
+    btnI.classList.add('active');
+    btnP.classList.remove('active');
   }
-  fix(btnP); fix(btnI);
+  btnP.setAttribute('aria-pressed', type === 'person' ? 'true' : 'false');
+  btnI.setAttribute('aria-pressed', type === 'incident' ? 'true' : 'false');
+  btnP.querySelector('.report-type-check').textContent = type === 'person' ? 'Selected' : 'Select';
+  btnI.querySelector('.report-type-check').textContent = type === 'incident' ? 'Selected' : 'Select';
 }
+
+setType(document.getElementById('report_type')?.value || 'person');
 
 // ═════════════════════════════════════════
 // 4. LEAFLET MAP

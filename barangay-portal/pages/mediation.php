@@ -3,7 +3,9 @@
 $bid = (int)$user['barangay_id'];
 $tab = $_GET['tab'] ?? 'upcoming';
 
-$upcoming = $overdue = $past = $active_cases = $notifications = [];
+finalize_due_settlements($pdo, $bid);
+
+$upcoming = $overdue = $past = $active_cases = $settlements = [];
 
 try {
     $upcoming = $pdo->query("
@@ -45,14 +47,15 @@ try {
         ORDER BY created_at DESC
     ")->fetchAll();
 
-    // Pending notifications (for the badge/panel)
-    $notifications = $pdo->query("
-        SELECT pn.*, b.case_number
-        FROM party_notifications pn
-        JOIN blotters b ON b.id = pn.blotter_id
-        WHERE pn.barangay_id = $bid AND pn.status = 'pending'
-        ORDER BY pn.created_at DESC
-        LIMIT 50
+    // Amicable settlements — active (within repudiation window) and resolved history
+    $settlements = $pdo->query("
+        SELECT s.*, b.case_number, b.complainant_name, b.respondent_name, b.id AS blotter_id,
+               DATEDIFF(s.repudiation_deadline, CURDATE()) AS days_left
+        FROM amicable_settlements s
+        JOIN blotters b ON b.id = s.blotter_id
+        WHERE s.barangay_id = $bid
+        ORDER BY (s.status = 'active') DESC, s.settled_date DESC
+        LIMIT 60
     ")->fetchAll();
 
 } catch (PDOException $e) {}
@@ -67,22 +70,15 @@ $bs = [
     'resolved'    => ['ch-emerald','Resolved'],
     'active'      => ['ch-teal',  'Active'],
 ];
-
-$notif_count = count($notifications);
 ?>
 
+<div class="med-page">
 <div class="page-hdr">
   <div class="page-hdr-left">
     <h2>Mediation Management</h2>
     <p><?= e($bgy['name']) ?> · Katarungang Pambarangay Process</p>
   </div>
   <div style="display:flex;gap:8px;align-items:center">
-    <?php if ($notif_count > 0): ?>
-      <button class="btn btn-outline btn-sm" onclick="openModal('modal-notifications')" style="position:relative">
-        🔔 Notifications
-        <span style="position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;background:var(--rose-400);color:#fff;font-size:9px;font-weight:700;border-radius:20px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--white)"><?= $notif_count ?></span>
-      </button>
-    <?php endif; ?>
     <button class="btn btn-primary" onclick="openModal('modal-new-med')">+ Schedule Hearing</button>
   </div>
 </div>
@@ -109,6 +105,10 @@ $notif_count = count($notifications);
   </a>
   <a class="tab-item <?= $tab==='past'?'active':'' ?>" href="?page=mediation&tab=past">
     History <span style="font-size:10px;background:var(--surface-2);padding:0 6px;border-radius:10px;margin-left:3px"><?= count($past) ?></span>
+  </a>
+  <?php $active_settlements = array_filter($settlements, fn($s) => $s['status']==='active'); ?>
+  <a class="tab-item <?= $tab==='settlements'?'active':'' ?>" href="?page=mediation&tab=settlements">
+    Settlements <span style="font-size:10px;background:var(--surface-2);padding:0 6px;border-radius:10px;margin-left:3px"><?= count($active_settlements) ?></span>
   </a>
 </div>
 
@@ -153,6 +153,7 @@ $notif_count = count($notifications);
     </div>
     <div class="card-foot" style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="act-btn green" onclick="openOutcome(<?= $m['id'] ?>,'<?= e(addslashes($m['case_number'])) ?>',<?= $cm ?>,<?= $rm ?>)">📝 Record Outcome</button>
+      <button class="act-btn" onclick="openNotifyModal(<?= $m['id'] ?>)">📧 Notify Parties</button>
       <button class="act-btn" onclick="viewBlotter(<?= $m['blotter_id'] ?>)">View Case</button>
       <button class="act-btn red" onclick="cancelMed(<?= $m['id'] ?>)">Cancel</button>
     </div>
@@ -255,8 +256,52 @@ $notif_count = count($notifications);
   </div>
 </div>
 <?php endif; ?>
+
+<?php /* ══════════ SETTLEMENTS (Kasunduang Pag-aayos) ══════════ */ elseif ($tab === 'settlements'): ?>
+<?php if (empty($settlements)): ?>
+  <div class="empty-state"><div class="es-icon">📜</div><div class="es-title">No settlements on record</div><div class="es-sub">Amicable settlements appear here once a mediation is marked Completed</div></div>
+<?php else: ?>
+<div style="font-size:13px;color:var(--ink-500);margin-bottom:14px">
+  Under Sec. 416, RA 7160, a settlement becomes final and enforceable like a court judgment 10 days after signing — unless a party formally repudiates it (fraud, violence, intimidation, or mistake of fact).
+</div>
+<div class="g2">
+  <?php foreach ($settlements as $s):
+    $ss = ['active'=>'ch-amber','final'=>'ch-emerald','repudiated'=>'ch-rose'];
+    $days_left = (int)$s['days_left'];
+  ?>
+  <div class="card" style="<?= $s['status']==='active'?'border-top:3px solid var(--amber-400)':($s['status']==='repudiated'?'border-top:3px solid var(--rose-400)':'border-top:3px solid var(--emerald-400)') ?>">
+    <div class="card-hdr" style="background:<?= $s['status']==='active'?'var(--amber-50)':($s['status']==='repudiated'?'var(--rose-50)':'var(--emerald-50)') ?>">
+      <div>
+        <div class="card-title"><?= e($s['case_number']) ?></div>
+        <div class="card-sub"><?= e($s['complainant_name']) ?> vs. <?= e($s['respondent_name']?:'Unknown') ?></div>
+      </div>
+      <span class="chip <?= $ss[$s['status']]??'ch-slate' ?>"><?= ucfirst($s['status']) ?></span>
+    </div>
+    <div class="card-body" style="padding:14px 18px">
+      <div class="dr"><span class="dr-lbl">Signed</span><span class="dr-val"><?= date('M j, Y', strtotime($s['settled_date'])) ?></span></div>
+      <?php if ($s['status']==='active'): ?>
+        <div class="dr"><span class="dr-lbl">Repudiation Deadline</span><span class="dr-val" style="font-weight:700;color:<?= $days_left<=2?'var(--rose-600)':'var(--amber-600)' ?>"><?= date('M j, Y', strtotime($s['repudiation_deadline'])) ?> (<?= $days_left>=0?"$days_left day(s) left":'overdue' ?>)</span></div>
+      <?php elseif ($s['status']==='final'): ?>
+        <div class="dr"><span class="dr-lbl">Finalized</span><span class="dr-val" style="color:var(--emerald-600)">✓ <?= $s['finalized_at']?date('M j, Y', strtotime($s['finalized_at'])):'' ?> — enforceable as a court judgment</span></div>
+      <?php else: ?>
+        <div class="dr"><span class="dr-lbl">Repudiated By</span><span class="dr-val" style="color:var(--rose-600)"><?= ucfirst($s['repudiated_by']) ?>, <?= date('M j, Y', strtotime($s['repudiated_at'])) ?></span></div>
+        <div class="dr"><span class="dr-lbl">Ground</span><span class="dr-val" style="font-size:12px"><?= e(mb_strimwidth($s['repudiation_reason'],0,80,'…')) ?></span></div>
+      <?php endif; ?>
+      <div class="dr" style="align-items:flex-start"><span class="dr-lbl">Terms</span><span class="dr-val" style="font-size:12px;white-space:normal"><?= e(mb_strimwidth($s['terms'],0,120,'…')) ?></span></div>
+    </div>
+    <div class="card-foot" style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="act-btn" onclick="viewBlotter(<?= $s['blotter_id'] ?>)">View Case</button>
+      <?php if ($s['status']==='active'): ?>
+        <button class="act-btn red" onclick="openRepudiate(<?= $s['id'] ?>,'<?= e(addslashes($s['case_number'])) ?>')">Record Repudiation</button>
+      <?php endif; ?>
+    </div>
+  </div>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
 <?php endif; // end tabs ?>
 
+</div>
 
 <!-- ════════════ MODALS ════════════ -->
 
@@ -342,6 +387,11 @@ $notif_count = count($notifications);
         <div id="reschedule-note" style="font-size:11px;color:var(--ink-400);margin-bottom:12px"></div>
       </div>
 
+      <div id="oc-terms-wrap" class="fg" style="display:none">
+        <label>Settlement Terms (Kasunduang Pag-aayos) <span class="req">*</span></label>
+        <textarea id="oc-terms" rows="3" placeholder="State the agreed terms both parties signed, e.g. payment amount and schedule, apology, boundary agreement, etc."></textarea>
+        <div style="font-size:11px;color:var(--ink-400);margin-top:4px">This becomes final and enforceable like a court judgment 10 days from today unless repudiated (Sec. 416, RA 7160).</div>
+      </div>
       <div class="fg"><label>Notes / Summary</label><textarea id="oc-outcome" rows="3" placeholder="What happened, what was agreed, or reason for outcome…"></textarea></div>
       <div class="fg" style="margin-bottom:0"><label>Next Steps</label><input type="text" id="oc-next" placeholder="e.g. Both parties to sign agreement on May 10"></div>
     </div>
@@ -375,52 +425,459 @@ $notif_count = count($notifications);
   </div>
 </div>
 
-<!-- Pending Notifications Panel -->
-<div class="modal-overlay" id="modal-notifications">
-  <div class="modal modal-lg">
-    <div class="modal-hdr"><span class="modal-title">Pending Notifications (<?= $notif_count ?>)</span><button class="modal-x" onclick="closeModal('modal-notifications')">×</button></div>
-    <div class="modal-body" style="padding:0">
-      <?php if (empty($notifications)): ?>
-        <div class="empty-state"><div class="es-icon">✅</div><div class="es-title">All notifications sent</div></div>
-      <?php else: ?>
-      <div style="padding:12px 18px;background:var(--surface);border-bottom:1px solid var(--surface-2);font-size:12px;color:var(--ink-500)">
-        These notifications are queued. Mark as Sent after delivering via SMS, phone call, or printed notice.
+<!-- Record Settlement Repudiation -->
+<div class="modal-overlay" id="modal-repudiate">
+  <div class="modal">
+    <div class="modal-hdr"><span class="modal-title">Record Settlement Repudiation</span><button class="modal-x" onclick="closeModal('modal-repudiate')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="rep-settlement-id">
+      <div class="fg"><label>Case</label><input type="text" id="rep-case" readonly style="background:var(--surface);font-weight:600"></div>
+      <div style="font-size:12px;color:var(--ink-500);margin-bottom:14px;padding:10px;background:var(--rose-50);border-radius:var(--r-sm);border-left:3px solid var(--rose-400)">
+        ⚠️ Valid grounds only (Sec. 418, RA 7160): fraud, violence, intimidation, or mistake of fact. A ₱ penalty is issued against the repudiating party and the case reopens.
       </div>
-      <?php
-        $type_icons = ['hearing_scheduled'=>'📅','hearing_rescheduled'=>'🔄','no_show_warning'=>'⚠️','case_dismissed'=>'🚫','cfa_issued'=>'📜','mediation_completed'=>'✅','mediation_cancelled'=>'❌','case_escalated'=>'⬆','general'=>'📢','hearing_reminder'=>'⏰'];
-        foreach ($notifications as $n):
-          $ico = $type_icons[$n['notification_type']] ?? '📢';
-          $party_chip = $n['recipient_type']==='complainant' ? '<span class="chip ch-teal" style="font-size:10px">Complainant</span>' : '<span class="chip ch-amber" style="font-size:10px">Respondent</span>';
-      ?>
-        <div style="padding:14px 18px;border-bottom:1px solid var(--surface-2)">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px">
-            <div style="display:flex;align-items:flex-start;gap:10px">
-              <span style="font-size:20px;line-height:1;margin-top:2px"><?= $ico ?></span>
-              <div>
-                <div style="font-size:13px;font-weight:700;color:var(--ink-900)"><?= e($n['subject']) ?></div>
-                <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-                  <?= $party_chip ?>
-                  <span style="font-size:11px;font-weight:600;color:var(--ink-700)"><?= e($n['recipient_name']) ?></span>
-                  <?php if ($n['recipient_contact']): ?><span style="font-size:11px;color:var(--teal-600);font-family:var(--font-mono)"><?= e($n['recipient_contact']) ?></span><?php endif; ?>
-                  <span style="font-size:10px;color:var(--ink-300)"><?= e($n['case_number']) ?></span>
-                </div>
+      <div class="fg"><label>Repudiating Party <span class="req">*</span></label>
+        <select id="rep-party">
+          <option value="">— Select —</option>
+          <option value="complainant">Complainant</option>
+          <option value="respondent">Respondent</option>
+        </select>
+      </div>
+      <div class="fg" style="margin-bottom:0"><label>Ground for Repudiation <span class="req">*</span></label><textarea id="rep-reason" rows="3" placeholder="Describe the fraud, violence, intimidation, or mistake of fact being alleged…"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('modal-repudiate')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitRepudiate()">Record Repudiation</button>
+    </div>
+  </div>
+</div>
+
+<!-- Notify Parties — management modal -->
+<div class="modal-overlay" id="modal-notify">
+  <div class="modal notify-modal">
+    <div class="modal-hdr">
+      <div>
+        <span class="modal-title">Notify Parties</span>
+        <div class="notify-case-sub" id="ntf-case-sub">Loading…</div>
+      </div>
+      <button class="modal-x" onclick="closeModal('modal-notify')">×</button>
+    </div>
+    <div class="modal-body" id="ntf-body">
+      <div class="notify-loading" id="ntf-loading">
+        <div class="spinner" style="margin:0 auto 12px;width:28px;height:28px;border-width:2px;border-color:rgba(20,145,155,.2);border-top-color:var(--teal-600)"></div>
+        Loading case &amp; hearing details…
+      </div>
+
+      <div id="ntf-content" style="display:none">
+
+        <div class="notify-hearing-strip" id="ntf-hearing-strip"></div>
+
+        <div class="notify-recipients">
+
+          <div class="notify-card" id="ntf-comp-card">
+            <div class="notify-card-hdr-row">
+              <label class="notify-card-hdr">
+                <input type="checkbox" id="ntf-comp-check" checked onchange="ntfUpdateSendBtn()">
+                <span class="notify-role-pill rp-comp">Complainant</span>
+                <span class="notify-card-name" id="ntf-comp-name"></span>
+              </label>
+              <div class="notify-card-meta">
+                <span id="ntf-comp-contact"></span>
+                <span class="notify-channel-badge" id="ntf-comp-channel"></span>
               </div>
             </div>
-            <button class="btn btn-success btn-sm" style="flex-shrink:0" onclick="markSent(<?= $n['id'] ?>,this)">Mark Sent</button>
+            <div class="notify-card-stats" id="ntf-comp-stats"></div>
+            <textarea id="ntf-comp-message" rows="7" placeholder="Message to the complainant…"></textarea>
           </div>
-          <div style="font-size:12px;color:var(--ink-600);line-height:1.6;padding:8px 10px;background:var(--surface);border-radius:var(--r-sm)"><?= nl2br(e($n['message'])) ?></div>
-          <div style="font-size:10px;color:var(--ink-300);margin-top:6px">Queued: <?= date('M j, Y g:i A', strtotime($n['created_at'])) ?> · Channel: <?= e($n['channel']) ?></div>
+
+          <div class="notify-card" id="ntf-resp-card">
+            <div class="notify-card-hdr-row">
+              <label class="notify-card-hdr">
+                <input type="checkbox" id="ntf-resp-check" checked onchange="ntfUpdateSendBtn()">
+                <span class="notify-role-pill rp-resp">Respondent</span>
+                <span class="notify-card-name" id="ntf-resp-name"></span>
+              </label>
+              <div class="notify-card-meta">
+                <span id="ntf-resp-contact"></span>
+                <span class="notify-channel-badge" id="ntf-resp-channel"></span>
+              </div>
+            </div>
+            <div class="notify-card-stats" id="ntf-resp-stats"></div>
+            <textarea id="ntf-resp-message" rows="7" placeholder="Message to the respondent…"></textarea>
+          </div>
+
         </div>
-      <?php endforeach; ?>
-      <?php endif; ?>
+
+        <button type="button" class="notify-history-toggle" id="ntf-history-toggle" onclick="ntfToggleHistory()">
+          <span id="ntf-history-arrow">▾</span> View send history <span id="ntf-history-count" class="chip ch-slate" style="font-size:10px"></span>
+        </button>
+        <div class="notify-history" id="ntf-history" style="display:none"></div>
+        <div class="notify-history-legend" id="ntf-history-legend" style="display:none">
+          <span class="chip ch-emerald" style="font-size:9px">Emailed</span> delivered by email ·
+          <span class="chip ch-teal" style="font-size:9px">Read</span> they opened it in their account ·
+          <span class="chip ch-amber" style="font-size:9px">In-app only</span> no email sent, not yet opened
+        </div>
+
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('modal-notify')">Cancel</button>
+      <button class="btn btn-primary" id="ntf-send-btn" onclick="submitNotify()" disabled>Send Notification</button>
     </div>
   </div>
 </div>
 
 <style>
+.med-page {
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.med-page .page-hdr {
+  margin-bottom:0;
+}
+.med-page .page-hdr h2 {
+  margin-bottom:2px;
+}
+.med-page .tab-bar {
+  margin-bottom:2px;
+  overflow-x:auto;
+  scrollbar-width:thin;
+}
+.med-page .tab-item {
+  padding:9px 12px;
+  white-space:nowrap;
+}
+.med-page .alert {
+  margin-bottom:0;
+  padding:10px 12px;
+}
+.med-page .g2 {
+  display:grid;
+  grid-template-columns:1fr;
+  gap:10px;
+}
+.med-page .g2 > .card {
+  overflow:hidden;
+}
+.med-page .card-hdr {
+  padding:10px 12px;
+  gap:10px;
+}
+.med-page .card-title {
+  font-size:13px;
+  line-height:1.25;
+}
+.med-page .card-sub {
+  font-size:11px;
+  line-height:1.35;
+  margin-top:2px;
+  overflow-wrap:anywhere;
+}
+.med-page .card-body {
+  padding:10px 12px !important;
+}
+.med-page .card-foot {
+  padding:9px 12px;
+  align-items:center;
+}
+.med-page .dr {
+  display:grid;
+  grid-template-columns:minmax(86px, .52fr) minmax(0, 1fr);
+  align-items:start;
+  gap:8px;
+  min-width:0;
+  padding:4px 0;
+}
+.med-page .dr-lbl {
+  font-size:10px;
+  line-height:1.25;
+  white-space:normal;
+}
+.med-page .dr-val {
+  font-size:12px;
+  line-height:1.35;
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.med-page .chip {
+  max-width:100%;
+}
+.med-page .empty-state {
+  padding:38px 20px;
+}
+.med-page .tbl-wrap {
+  max-height:calc(100vh - 265px);
+  overflow:auto;
+}
+.med-page table th {
+  position:sticky;
+  top:0;
+  z-index:2;
+  background:var(--surface);
+}
+.med-page table th,
+.med-page table td {
+  padding:8px 10px;
+}
+.med-page table td {
+  vertical-align:top;
+}
+#modal-outcome .modal {
+  max-height:92vh;
+  display:flex;
+  flex-direction:column;
+}
+#modal-outcome .modal-body {
+  overflow:auto;
+}
+#modal-outcome .modal-body {
+  padding:14px 18px;
+}
+#modal-outcome .fg {
+  margin-bottom:10px;
+}
+#modal-outcome textarea {
+  min-height:74px;
+}
 .att-btn { padding:7px 16px;border-radius:var(--r-sm);font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--ink-100);background:var(--white);color:var(--ink-400);font-family:inherit;transition:all .12s; }
 .att-btn.active { background:var(--teal-600);color:var(--white);border-color:var(--teal-600); }
 .att-btn:not(.active):hover { border-color:var(--teal-400);color:var(--teal-600);background:var(--teal-50); }
+@media (min-width: 960px) {
+  .med-page .g2 > .card {
+    display:grid;
+    grid-template-columns:minmax(210px, .85fr) minmax(360px, 1.55fr) minmax(160px, .55fr);
+  }
+  .med-page .g2 > .card > .card-hdr {
+    border-right:1px solid var(--ink-100);
+    border-bottom:0;
+    align-items:flex-start;
+  }
+  .med-page .g2 > .card > .card-body {
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    column-gap:18px;
+    row-gap:0;
+    align-content:center;
+  }
+  .med-page .g2 > .card > .card-foot {
+    border-left:1px solid var(--ink-100);
+    border-top:0;
+    flex-direction:column;
+    justify-content:center;
+    align-items:stretch;
+  }
+  .med-page .g2 > .card > .card-foot .btn,
+  .med-page .g2 > .card > .card-foot .act-btn {
+    width:100%;
+    text-align:center;
+  }
+}
+@media (max-width: 760px) {
+  .med-page .page-hdr {
+    gap:10px;
+  }
+  .med-page .page-hdr > div:last-child {
+    width:100%;
+    justify-content:flex-start;
+    flex-wrap:wrap;
+  }
+  .med-page .dr {
+    grid-template-columns:1fr;
+    gap:2px;
+  }
+  #modal-outcome .modal-body {
+    padding:12px 14px;
+  }
+}
+
+/* ── Notify Parties modal ─────────────────────────────────────── */
+.notify-modal {
+  width:760px;
+  max-width:95vw;
+  max-height:92vh;
+  display:flex;
+  flex-direction:column;
+}
+.notify-modal .modal-body {
+  overflow-y:auto;
+}
+.notify-case-sub {
+  font-size:12px;
+  color:var(--ink-400);
+  margin-top:2px;
+  font-family:var(--font-mono);
+}
+.notify-loading {
+  text-align:center;
+  padding:48px 20px;
+  color:var(--ink-400);
+  font-size:13px;
+}
+.notify-hearing-strip {
+  display:flex;
+  align-items:center;
+  gap:18px;
+  flex-wrap:wrap;
+  background:var(--teal-50);
+  border:1px solid var(--teal-100);
+  border-radius:var(--r-md);
+  padding:12px 16px;
+  margin-bottom:16px;
+  font-size:12px;
+}
+.notify-hearing-strip strong {
+  color:var(--teal-700);
+  font-size:13px;
+}
+.notify-recipients {
+  display:grid;
+  grid-template-columns:1fr;
+  gap:14px;
+  margin-bottom:14px;
+}
+.notify-card-hdr-row {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.notify-card-hdr-row .notify-card-meta {
+  margin-left:auto;
+}
+.notify-card {
+  border:1px solid var(--ink-100);
+  border-radius:var(--r-md);
+  padding:12px 14px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  transition:opacity .12s, border-color .12s;
+}
+.notify-card.disabled {
+  opacity:.5;
+}
+.notify-card-hdr {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  cursor:pointer;
+  font-weight:700;
+}
+.notify-card-hdr input[type="checkbox"] {
+  width:15px;
+  height:15px;
+  accent-color:var(--teal-600);
+  cursor:pointer;
+  flex-shrink:0;
+}
+.notify-role-pill {
+  font-size:10px;
+  font-weight:700;
+  padding:2px 8px;
+  border-radius:20px;
+  text-transform:uppercase;
+  letter-spacing:.03em;
+  flex-shrink:0;
+}
+.rp-comp { background:var(--teal-50); color:var(--teal-700); border:1px solid var(--teal-100); }
+.rp-resp { background:var(--amber-50); color:var(--amber-600); border:1px solid var(--amber-200); }
+.notify-card-name {
+  font-size:13px;
+  color:var(--ink-900);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.notify-card-meta {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:11px;
+  color:var(--ink-400);
+  font-family:var(--font-mono);
+  flex-shrink:0;
+}
+.notify-channel-badge {
+  font-size:10px;
+  font-weight:700;
+  padding:2px 8px;
+  border-radius:20px;
+  white-space:nowrap;
+  font-family:var(--font-body);
+}
+.ncb-email  { background:var(--emerald-50); color:var(--emerald-600); border:1px solid var(--emerald-100); }
+.ncb-noemail{ background:var(--ink-50);     color:var(--ink-400);     border:1px solid var(--ink-100); }
+.notify-card-stats {
+  font-size:11px;
+  color:var(--ink-500);
+  background:var(--surface);
+  border-radius:var(--r-sm);
+  padding:6px 9px;
+  line-height:1.5;
+}
+.notify-card textarea {
+  width:100%;
+  font-family:inherit;
+  font-size:13px;
+  line-height:1.65;
+  padding:10px 12px;
+  border:1px solid var(--ink-100);
+  border-radius:var(--r-sm);
+  resize:vertical;
+  min-height:130px;
+  color:var(--ink-800);
+}
+.notify-card textarea:focus {
+  outline:none;
+  border-color:var(--teal-400);
+}
+.notify-history-toggle {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  background:none;
+  border:none;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:600;
+  color:var(--teal-600);
+  padding:6px 0;
+  font-family:inherit;
+}
+.notify-history-legend {
+  font-size:10.5px;
+  color:var(--ink-400);
+  padding:6px 2px 8px;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  flex-wrap:wrap;
+}
+.notify-history {
+  border:1px solid var(--ink-100);
+  border-radius:var(--r-md);
+  overflow:hidden;
+  margin-top:6px;
+}
+.notify-history-row {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 12px;
+  border-bottom:1px solid var(--surface-2);
+  font-size:11.5px;
+}
+.notify-history-row:last-child { border-bottom:none; }
+.notify-history-empty {
+  padding:20px;
+  text-align:center;
+  color:var(--ink-300);
+  font-size:12px;
+}
+@media(max-width:640px) {
+  .notify-card-hdr-row { flex-direction:column; align-items:flex-start; }
+  .notify-card-hdr-row .notify-card-meta { margin-left:0; }
+}
 </style>
 
 <script>
@@ -496,12 +953,14 @@ function onResultChange(val) {
 
   if (val==='completed') {
     consq.style.display=''; consq.style.background='var(--emerald-50)'; consq.style.borderColor='var(--emerald-100)'; consq.style.color='var(--emerald-600)';
-    consq.innerHTML='✅ Both parties present and agreement reached. Blotter will be marked <strong>Resolved</strong>.';
+    consq.innerHTML='✅ Both parties present and agreement reached. Blotter will be marked <strong>Resolved</strong> and a 10-day repudiation window (Sec. 416) will open.';
   }
   if (val==='cancelled') {
     consq.style.display=''; consq.style.background='var(--surface)'; consq.style.borderColor='var(--ink-100)'; consq.style.color='var(--ink-400)';
     consq.innerHTML='Hearing cancelled by barangay. Blotter returns to <strong>Active</strong>. No missed count added.';
   }
+
+  document.getElementById('oc-terms-wrap').style.display = (val==='completed') ? '' : 'none';
 }
 
 function openOutcome(id, caseNo, compMissed, respMissed) {
@@ -510,6 +969,7 @@ function openOutcome(id, caseNo, compMissed, respMissed) {
   document.getElementById('oc-comp-missed').value = compMissed;
   document.getElementById('oc-resp-missed').value = respMissed;
   document.getElementById('oc-outcome').value     = '';
+  document.getElementById('oc-terms').value       = '';
   document.getElementById('oc-next').value        = '';
   document.getElementById('oc-redate').value      = '';
   document.getElementById('oc-retime').value      = '09:00';
@@ -535,11 +995,16 @@ function submitOutcome() {
   if ((status==='rescheduled'||document.getElementById('oc-redate').required) && !redate)
     return showToast('Please provide the new hearing date.','error');
 
+  const terms = document.getElementById('oc-terms').value.trim();
+  if (status==='completed' && !terms)
+    return showToast('Settlement terms are required to record a completed mediation.','error');
+
   const data = {
     action:'record_outcome', id:document.getElementById('oc-id').value,
     status, complainant_attended:document.getElementById('oc-comp').value,
     respondent_attended:document.getElementById('oc-resp').value,
     outcome:document.getElementById('oc-outcome').value.trim(),
+    settlement_terms:terms,
     next_steps:document.getElementById('oc-next').value.trim(),
     reschedule_date:redate, reschedule_time:document.getElementById('oc-retime').value,
   };
@@ -583,12 +1048,159 @@ function submitAdjust(){
     .then(r=>r.json()).then(d=>{loading(false);closeModal('modal-adjust');showToast(d.message,d.success?'success':'error');if(d.success)setTimeout(()=>location.reload(),700);});
 }
 
-function markSent(id, btn){
-  btn.disabled=true; btn.textContent='Saving…';
-  fetch('ajax/mediation_action.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'mark_notif_sent',notif_id:id})})
+function openRepudiate(settlementId, caseNo) {
+  document.getElementById('rep-settlement-id').value = settlementId;
+  document.getElementById('rep-case').value           = caseNo;
+  document.getElementById('rep-party').value          = '';
+  document.getElementById('rep-reason').value         = '';
+  openModal('modal-repudiate');
+}
+
+function submitRepudiate(){
+  const party  = document.getElementById('rep-party').value;
+  const reason = document.getElementById('rep-reason').value.trim();
+  if (!party)  return showToast('Select which party is repudiating.','error');
+  if (!reason) return showToast('A ground for repudiation is required.','error');
+  if (!confirm('Record this repudiation? The case will reopen and a penalty will be issued.')) return;
+  const data = {action:'repudiate_settlement', settlement_id:document.getElementById('rep-settlement-id').value, party, reason};
+  loading(true);
+  fetch('ajax/mediation_action.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+    .then(r=>r.json()).then(d=>{loading(false);closeModal('modal-repudiate');showToast(d.message,d.success?'success':'error');if(d.success)setTimeout(()=>location.reload(),900);})
+    .catch(()=>{loading(false);showToast('Request failed.','error');});
+}
+
+// ── Notify Parties — management modal ──────────────────────────
+let ntfMedId = null;
+let ntfData  = null;
+
+// party_notifications.status meanings:
+//   sent    — an email was actually delivered to this party
+//   read    — the party opened their VOICE account and viewed it (in Notices & Sanctions)
+//   pending — recorded in their account only; no email was sent (no email on file,
+//             not a linked account, or the send failed) and they haven't opened it yet
+const NTF_STATUS_MAP = {
+  sent:    { cls: 'ch-emerald', label: 'Emailed',      title: 'An email was successfully delivered to this party.' },
+  read:    { cls: 'ch-teal',    label: 'Read',          title: 'The party opened their VOICE account and viewed this notice.' },
+  pending: { cls: 'ch-amber',   label: 'In-app only',   title: 'No email was sent (no email on file or not a linked account) and the party has not opened it in their account yet.' },
+};
+
+function openNotifyModal(medId){
+  ntfMedId = medId;
+  ntfData  = null;
+  document.getElementById('ntf-case-sub').textContent = '';
+  document.getElementById('ntf-loading').style.display = '';
+  document.getElementById('ntf-content').style.display = 'none';
+  document.getElementById('ntf-history').style.display = 'none';
+  document.getElementById('ntf-history-legend').style.display = 'none';
+  document.getElementById('ntf-history-arrow').textContent = '▾';
+  document.getElementById('ntf-history-count').textContent = '';
+  document.getElementById('ntf-send-btn').disabled = true;
+  openModal('modal-notify');
+
+  fetch('ajax/mediation_action.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'notify_hearing_info',id:medId})})
+    .then(r=>r.json())
+    .then(d=>{
+      if (!d.success) { showToast(d.message,'error'); closeModal('modal-notify'); return; }
+      ntfData = d;
+      ntfRender(d);
+    })
+    .catch(()=>{ showToast('Could not load notification details.','error'); closeModal('modal-notify'); });
+}
+
+function ntfFmtDate(s){
+  if (!s) return null;
+  return new Date(s.replace(' ','T')).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+}
+
+function ntfRenderCard(party, info){
+  const card = document.getElementById('ntf-' + party + '-card');
+  if (!info) { card.style.display = 'none'; document.getElementById('ntf-' + party + '-check').checked = false; return; }
+  card.style.display = '';
+  document.getElementById('ntf-' + party + '-name').textContent = info.name || '—';
+  document.getElementById('ntf-' + party + '-contact').textContent = info.contact ? ('📞 ' + info.contact) : (info.linked ? 'No contact number on file' : 'Walk-in — not linked to an account');
+  document.getElementById('ntf-' + party + '-message').value = info.message;
+
+  const badge = document.getElementById('ntf-' + party + '-channel');
+  if (info.email) { badge.className = 'notify-channel-badge ncb-email'; badge.textContent = '📧 Will email: ' + info.email; }
+  else if (info.linked) { badge.className = 'notify-channel-badge ncb-noemail'; badge.textContent = '👤 Linked account, no email — in-app only'; }
+  else { badge.className = 'notify-channel-badge ncb-noemail'; badge.textContent = '📵 Not linked — in-app record only'; }
+
+  const stats = document.getElementById('ntf-' + party + '-stats');
+  const last = ntfFmtDate(info.last_sent);
+  stats.textContent = info.attempts > 0
+    ? `Notified ${info.attempts} time${info.attempts===1?'':'s'} before (${info.emailed} by email) · Last: ${last}`
+    : 'Never notified about this hearing yet';
+}
+
+function ntfRender(d){
+  document.getElementById('ntf-case-sub').textContent = d.case_number;
+  document.getElementById('ntf-hearing-strip').innerHTML =
+    `<span>📅 <strong>${d.hearing.date}</strong></span><span>⏰ ${d.hearing.time}</span><span>📍 ${d.hearing.venue}</span>`;
+
+  ntfRenderCard('comp', d.complainant);
+  ntfRenderCard('resp', d.respondent);
+
+  const histCount = document.getElementById('ntf-history-count');
+  histCount.textContent = d.history.length;
+  document.getElementById('ntf-history').innerHTML = d.history.length ? d.history.map(h => {
+    const roleLbl = h.recipient_type === 'complainant' ? 'Complainant' : 'Respondent';
+    const emailed = (h.channel||'').includes('email');
+    const s = NTF_STATUS_MAP[h.status] || NTF_STATUS_MAP.pending;
+    const statusChip = `<span class="chip ${s.cls}" style="font-size:9px" title="${s.title}">${s.label}</span>`;
+    return `<div class="notify-history-row">
+      <span style="flex:1">${roleLbl} · ${h.notification_type.replace(/_/g,' ')}${emailed?' · 📧 emailed':''}</span>
+      ${statusChip}
+      <span style="color:var(--ink-300);white-space:nowrap">${ntfFmtDate(h.created_at)}</span>
+    </div>`;
+  }).join('') : '<div class="notify-history-empty">No previous notifications for this hearing.</div>';
+
+  document.getElementById('ntf-loading').style.display = 'none';
+  document.getElementById('ntf-content').style.display = '';
+  ntfUpdateSendBtn();
+}
+
+function ntfUpdateSendBtn(){
+  const compOn = document.getElementById('ntf-comp-check').checked && document.getElementById('ntf-comp-card').style.display !== 'none';
+  const respOn = document.getElementById('ntf-resp-check').checked && document.getElementById('ntf-resp-card').style.display !== 'none';
+  document.getElementById('ntf-comp-card').classList.toggle('disabled', !compOn);
+  document.getElementById('ntf-resp-card').classList.toggle('disabled', !respOn);
+  const count = (compOn?1:0) + (respOn?1:0);
+  const btn = document.getElementById('ntf-send-btn');
+  btn.disabled = count === 0;
+  btn.textContent = count === 0 ? 'Select at least one recipient' : `Send Notification${count>1?'s':''} (${count})`;
+}
+
+function ntfToggleHistory(){
+  const el = document.getElementById('ntf-history');
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : '';
+  document.getElementById('ntf-history-legend').style.display = open ? 'none' : '';
+  document.getElementById('ntf-history-arrow').textContent = open ? '▾' : '▴';
+  document.getElementById('ntf-history-count').textContent = ntfData ? ntfData.history.length : 0;
+}
+
+function submitNotify(){
+  if (!ntfMedId) return;
+  const recipients = [];
+  if (document.getElementById('ntf-comp-check').checked && document.getElementById('ntf-comp-card').style.display !== 'none') recipients.push('complainant');
+  if (document.getElementById('ntf-resp-check').checked && document.getElementById('ntf-resp-card').style.display !== 'none') recipients.push('respondent');
+  if (!recipients.length) return showToast('Select at least one recipient.','error');
+
+  const data = {
+    action: 'notify_hearing',
+    id: ntfMedId,
+    recipients,
+    comp_message: document.getElementById('ntf-comp-message').value.trim(),
+    resp_message: document.getElementById('ntf-resp-message').value.trim(),
+  };
+  const btn = document.getElementById('ntf-send-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  fetch('ajax/mediation_action.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
     .then(r=>r.json()).then(d=>{
-      if(d.success){ btn.closest('div[style]').style.opacity='.4'; btn.textContent='Sent'; showToast('Marked as sent.','success'); }
-      else { btn.disabled=false; btn.textContent='Mark Sent'; showToast(d.message,'error'); }
-    });
+      showToast(d.message, d.success?'success':'error');
+      if (d.success) { closeModal('modal-notify'); }
+      else { btn.disabled = false; ntfUpdateSendBtn(); }
+    })
+    .catch(()=>{ showToast('Request failed.','error'); btn.disabled = false; ntfUpdateSendBtn(); });
 }
 </script>

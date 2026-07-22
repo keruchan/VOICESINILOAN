@@ -8,6 +8,8 @@ $name_likes = implode(' AND ', array_map(fn($p) => "b.respondent_name LIKE '%" .
 $name_likes_plain = $name_likes ?: "1=0";
 $case_scope = "(b.complainant_user_id = $uid OR b.respondent_user_id = $uid OR (b.respondent_user_id IS NULL AND ($name_likes_plain)))";
 
+finalize_due_settlements($pdo, $bid);
+
 $upcoming = []; $past = [];
 try {
     $upcoming = $pdo->query("
@@ -45,9 +47,13 @@ try {
                 ELSE ms.respondent_attended
             END AS my_attended,
             b.case_number,
-            b.incident_type
+            b.incident_type,
+            s.status AS settlement_status,
+            s.repudiation_deadline,
+            DATEDIFF(s.repudiation_deadline, CURDATE()) AS settlement_days_left
         FROM mediation_schedules ms
         JOIN blotters b ON b.id = ms.blotter_id
+        LEFT JOIN amicable_settlements s ON s.mediation_schedule_id = ms.id
         WHERE
             $case_scope
             AND (
@@ -183,6 +189,7 @@ $sc = ['completed'=>'ch-green','cancelled'=>'ch-rose','missed'=>'ch-amber','resc
             <th>Date</th>
             <th>Status</th>
             <th>You Attended</th>
+            <th>Settlement</th>
             <th>Outcome</th>
           </tr>
         </thead>
@@ -205,6 +212,17 @@ $sc = ['completed'=>'ch-green','cancelled'=>'ch-rose','missed'=>'ch-amber','resc
             <td>
               <?php if ($h['my_attended'] !== null): ?>
                 <span class="chip <?= $h['my_attended']?'ch-green':'ch-rose' ?>"><?= $h['my_attended']?'Yes':'No' ?></span>
+              <?php else: ?>
+                <span style="color:var(--ink-300)">—</span>
+              <?php endif; ?>
+            </td>
+            <td style="font-size:12px">
+              <?php if ($h['settlement_status'] === 'active'): $dl=(int)$h['settlement_days_left']; ?>
+                <span class="chip ch-amber" style="font-size:10px">Repudiable <?= $dl>=0?"($dl d left)":'' ?></span>
+              <?php elseif ($h['settlement_status'] === 'final'): ?>
+                <span class="chip ch-green" style="font-size:10px">Final</span>
+              <?php elseif ($h['settlement_status'] === 'repudiated'): ?>
+                <span class="chip ch-rose" style="font-size:10px">Repudiated</span>
               <?php else: ?>
                 <span style="color:var(--ink-300)">—</span>
               <?php endif; ?>

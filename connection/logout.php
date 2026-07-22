@@ -33,6 +33,7 @@ if (ini_get('session.use_cookies')) {
 // 3. Destroy the session on the server
 session_destroy();
 
-// 4. Redirect to login page
-header('Location: login.php?logged_out=1');
+// 4. Redirect after logout
+$redirect_to = (($_GET['to'] ?? '') === 'home') ? '../index.php' : 'login.php?logged_out=1';
+header('Location: ' . $redirect_to);
 exit;

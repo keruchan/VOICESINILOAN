@@ -22,108 +22,15 @@ $page_titles = [
     'settings'  => 'Settings',
 ];
 $current_title = $page_titles[$page];
-
-// ── Notification data (Option A — live from existing tables) ──
-$notifs = [];
-$notif_count = 0;
-try {
-    // 1. Pending community users awaiting approval
-    $pending_users = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE is_active=0 AND role='community'")->fetchColumn();
-    if ($pending_users > 0) {
-        $notifs[] = [
-            'type'    => 'users',
-            'color'   => '#F59E0B',
-            'icon'    => 'user',
-            'title'   => "$pending_users community user(s) pending approval",
-            'sub'     => 'New registrations awaiting activation',
-            'link'    => '?page=users&filter=pending',
-            'time'    => 'Now',
-        ];
-    }
-
-    // 2. Pending barangay officer accounts
-    $pending_officers = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE is_active=0 AND role='barangay'")->fetchColumn();
-    if ($pending_officers > 0) {
-        $notifs[] = [
-            'type'    => 'officers',
-            'color'   => '#A78BFA',
-            'icon'    => 'officer',
-            'title'   => "$pending_officers barangay officer(s) pending activation",
-            'sub'     => 'Officer accounts need to be activated',
-            'link'    => '?page=users&filter=pending',
-            'time'    => 'Now',
-        ];
-    }
-
-    // 3. Escalated blotters (escalated to municipality level)
-    $escalated = (int)$pdo->query("SELECT COUNT(*) FROM blotters WHERE status='escalated'")->fetchColumn();
-    if ($escalated > 0) {
-        $notifs[] = [
-            'type'    => 'escalated',
-            'color'   => '#FB7185',
-            'icon'    => 'alert',
-            'title'   => "$escalated blotter(s) escalated to municipality",
-            'sub'     => 'Requires superadmin attention',
-            'link'    => '?page=reports',
-            'time'    => 'Now',
-        ];
-    }
-
-    // 4. Inactive barangays (registered but inactive)
-    $inactive_bgy = (int)$pdo->query("SELECT COUNT(*) FROM barangays WHERE is_active=0")->fetchColumn();
-    if ($inactive_bgy > 0) {
-        $notifs[] = [
-            'type'    => 'barangay',
-            'color'   => '#94A3B8',
-            'icon'    => 'bgy',
-            'title'   => "$inactive_bgy barangay(s) currently inactive",
-            'sub'     => 'Review and activate if needed',
-            'link'    => '?page=barangays',
-            'time'    => 'Now',
-        ];
-    }
-
-    // 5. Barangays with no officer assigned
-    $no_officer = (int)$pdo->query("
-        SELECT COUNT(*) FROM barangays b
-        WHERE b.is_active=1
-          AND NOT EXISTS (SELECT 1 FROM users u WHERE u.barangay_id=b.id AND u.role='barangay' AND u.is_active=1)
-    ")->fetchColumn();
-    if ($no_officer > 0) {
-        $notifs[] = [
-            'type'    => 'no_officer',
-            'color'   => '#F59E0B',
-            'icon'    => 'warning',
-            'title'   => "$no_officer active barangay(s) have no assigned officer",
-            'sub'     => 'No active barangay officer account found',
-            'link'    => '?page=barangays',
-            'time'    => 'Now',
-        ];
-    }
-
-    // 6. Recent blotters filed in last 24 hours (across all barangays)
-    $recent_filed = (int)$pdo->query("SELECT COUNT(*) FROM blotters WHERE created_at >= NOW() - INTERVAL 24 HOUR")->fetchColumn();
-    if ($recent_filed > 0) {
-        $notifs[] = [
-            'type'    => 'recent',
-            'color'   => '#2EBAC6',
-            'icon'    => 'doc',
-            'title'   => "$recent_filed new blotter(s) filed in the last 24 hours",
-            'sub'     => 'Across all barangays',
-            'link'    => '?page=reports',
-            'time'    => 'Last 24h',
-        ];
-    }
-
-    $notif_count = count($notifs);
-} catch (Exception $e) {}
+// Notification bell data (insights + discrete notifications) is now served
+// live by ajax/notifications_action.php — see the topbar bell below.
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><?= htmlspecialchars($current_title) ?> — VOICE2 Superadmin</title>
+  <title><?= htmlspecialchars($current_title) ?> — VOICE Superadmin</title>
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Playfair+Display:wght@700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -133,16 +40,16 @@ try {
 
   <!-- ══════════ SIDEBAR ══════════ -->
   <aside class="sidebar">
-    <div class="sidebar-brand">
+    <a href="../index.php" class="sidebar-brand sidebar-brand-link" title="Back to landing page">
       <div class="brand-label"><div class="brand-pulse"></div>Superadmin Portal</div>
-      <div class="brand-name">VOICE<br>Command</div>
+      <div class="brand-name">VOICE</div>
       <div class="brand-sub">Municipality-wide Oversight</div>
-    </div>
+    </a>
 
     <div class="muni-chip">
       <div class="muni-icon">SL</div>
       <div>
-        <div class="muni-name">Paete</div>
+        <div class="muni-name">Siniloan</div>
         <div class="muni-role">Municipality Administrator</div>
       </div>
     </div>
@@ -209,73 +116,33 @@ try {
   <div class="main">
     <div class="topbar">
       <div class="topbar-left">
+        <button class="hamburger" type="button" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span></button>
         <span class="topbar-title"><?= htmlspecialchars($current_title) ?></span>
-        <span class="topbar-crumb">Paete · Superadmin</span>
+        <span class="topbar-crumb">Siniloan · Superadmin</span>
       </div>
       <div class="topbar-actions">
-
-        <!-- ── Notification Bell ── -->
-        <div class="notif-wrap" id="notif-wrap">
-          <button class="icon-btn notif-btn" id="notif-btn" onclick="toggleNotif(event)" title="Notifications">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2a5 5 0 0 1 5 5v2l1.5 2.5h-13L3 9V7a5 5 0 0 1 5-5z"/><path d="M6.5 13.5a1.5 1.5 0 0 0 3 0"/></svg>
-            <?php if ($notif_count > 0): ?>
-              <span class="notif-badge"><?= $notif_count ?></span>
-            <?php endif; ?>
+        <div class="notif-bell-wrap">
+          <button class="notif-bell-btn" type="button" onclick="toggleNotifDropdown()" aria-label="Notifications">
+            <svg width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9.5 3c-2.5 0-4.2 2-4.2 4.5v2.3c0 .7-.3 1.4-.8 1.9l-.7.8c-.5.5-.1 1.4.6 1.4h10.2c.7 0 1.1-.9.6-1.4l-.7-.8c-.5-.5-.8-1.2-.8-1.9V7.5C13.7 5 12 3 9.5 3z"/>
+              <path d="M7.8 15.5a1.7 1.7 0 0 0 3.4 0"/>
+            </svg>
+            <span class="notif-bell-badge" id="notif-bell-badge" style="display:none">0</span>
           </button>
-
-          <!-- Dropdown panel -->
-          <div class="notif-panel" id="notif-panel">
-            <div class="notif-panel-hdr">
-              <div>
-                <div class="notif-panel-title">Notifications</div>
-                <div class="notif-panel-sub"><?= $notif_count > 0 ? "$notif_count items need attention" : "All clear" ?></div>
-              </div>
-              <?php if ($notif_count > 0): ?>
-                <span class="notif-count-chip"><?= $notif_count ?> new</span>
-              <?php endif; ?>
+          <div class="notif-dropdown" id="notif-dropdown">
+            <div class="notif-dropdown-hdr">
+              <span>Notifications</span>
+              <button type="button" onclick="markAllNotifRead()">Mark all read</button>
             </div>
-
-            <div class="notif-list">
-              <?php if (empty($notifs)): ?>
-                <div class="notif-empty">
-                  <div class="notif-empty-icon">
-                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M14 4a8 8 0 0 1 8 8v3.5l2 3.5H4l2-3.5V12a8 8 0 0 1 8-8z"/><path d="M11 22a3 3 0 0 0 6 0"/></svg>
-                  </div>
-                  <div class="notif-empty-title">All caught up!</div>
-                  <div class="notif-empty-sub">No pending items require your attention right now.</div>
-                </div>
-              <?php else: foreach ($notifs as $n): ?>
-                <a class="notif-item" href="<?= $n['link'] ?>" onclick="closeNotif()">
-                  <div class="notif-item-ic" style="background:<?= $n['color'] ?>22;color:<?= $n['color'] ?>">
-                    <?php
-                    $icons = [
-                      'user'    => '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="5" r="2.5"/><path d="M1.5 13c0-3 2.5-5 5.5-5s5.5 2.2 5.5 5"/></svg>',
-                      'officer' => '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="5" cy="5" r="2.2"/><path d="M1 13c0-2.5 1.8-4.5 4-4.5"/><circle cx="10" cy="6" r="1.8"/><path d="M7.5 13c0-2 1.1-3.5 2.5-3.5s2.5 1.5 2.5 3.5"/></svg>',
-                      'alert'   => '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="7" r="5.5"/><path d="M7 4.5v3"/><circle cx="7" cy="9.5" r=".5" fill="currentColor"/></svg>',
-                      'bgy'     => '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 13V6.5L7 2l5 4.5V13"/><path d="M5 13v-3.5h4V13"/></svg>',
-                      'warning' => '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 1.5L13 12.5H1L7 1.5z"/><path d="M7 6v3"/><circle cx="7" cy="10.5" r=".5" fill="currentColor"/></svg>',
-                      'doc'     => '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="1.5" width="10" height="11" rx="1.5"/><path d="M4.5 5h5M4.5 7.5h5M4.5 10h3"/></svg>',
-                    ];
-                    echo $icons[$n['icon']] ?? $icons['doc'];
-                    ?>
-                  </div>
-                  <div class="notif-item-body">
-                    <div class="notif-item-title"><?= htmlspecialchars($n['title']) ?></div>
-                    <div class="notif-item-sub"><?= htmlspecialchars($n['sub']) ?></div>
-                  </div>
-                  <div class="notif-item-time"><?= $n['time'] ?></div>
-                </a>
-              <?php endforeach; endif; ?>
-            </div>
-
-            <div class="notif-panel-foot">
-              <a href="?page=users&filter=pending" onclick="closeNotif()" style="font-size:12px;color:var(--indigo-400);font-weight:600;text-decoration:none">View pending users →</a>
-              <button onclick="location.reload()" style="font-size:11px;color:var(--ink-300);background:none;border:none;cursor:pointer">Refresh</button>
+            <div class="notif-dropdown-list" id="notif-dropdown-list">
+              <div class="notif-dd-empty">Loading…</div>
             </div>
           </div>
         </div>
-
-        <a href="../connection/logout.php" class="btn btn-outline btn-sm">Logout</a>
+        <a href="?page=settings" class="topbar-user-chip">
+          <div class="topbar-user-av"><?= strtoupper(substr($user['name'] ?? 'SA', 0, 2)) ?></div>
+          <span class="topbar-user-name"><?= htmlspecialchars($user['name'] ?? 'Superadmin') ?></span>
+        </a>
       </div>
     </div>
 
@@ -285,6 +152,24 @@ try {
   </div>
 
 </div><!-- /app -->
+
+<!-- Export Preview Modal -->
+<div class="modal-overlay" id="modal-export-preview">
+  <div class="modal modal-lg" style="max-width:920px;width:95vw;max-height:92vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
+    <div class="modal-hdr" style="flex-shrink:0">
+      <span class="modal-title" id="export-preview-title">Export Preview</span>
+      <button class="modal-x" onclick="closeModal('modal-export-preview')">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="export-preview-body" style="overflow:auto;padding:18px 20px;max-height:68vh"></div>
+    <div class="modal-foot" style="flex-shrink:0;justify-content:space-between">
+      <button class="btn btn-ghost" onclick="closeModal('modal-export-preview')">Close</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="btn btn-outline" type="button" onclick="printExportPreview()">Print / Save PDF</button>
+        <a class="btn btn-primary" id="export-preview-download" href="#">Download CSV</a>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Loading overlay -->
 <div id="loading-overlay"><div class="spinner"></div></div>
@@ -308,25 +193,361 @@ function closeModal(id) { document.getElementById(id)?.classList.remove('open');
 document.addEventListener('click', e => { if(e.target.classList.contains('modal-overlay')) e.target.classList.remove('open'); });
 function loading(show) { document.getElementById('loading-overlay').classList.toggle('show',show); }
 
-/* ── Notification dropdown ── */
-function toggleNotif(e) {
-  e.stopPropagation();
-  const panel = document.getElementById('notif-panel');
-  panel.classList.toggle('open');
+let exportPreviewHtml = '';
+function epEsc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-function closeNotif() {
-  document.getElementById('notif-panel')?.classList.remove('open');
+function showExportPreview(url, fallbackTitle) {
+  const modal = document.getElementById('modal-export-preview');
+  const title = document.getElementById('export-preview-title');
+  const body = document.getElementById('export-preview-body');
+  const dl = document.getElementById('export-preview-download');
+  if (!modal || !body || !dl) {
+    window.location = url;
+    return;
+  }
+  const previewUrl = new URL(url, window.location.href);
+  previewUrl.searchParams.set('preview', '1');
+  title.textContent = fallbackTitle || 'Export Preview';
+  body.innerHTML = '<div style="text-align:center;padding:36px;color:var(--ink-400)">Preparing preview...</div>';
+  exportPreviewHtml = '';
+  dl.removeAttribute('href');
+  openModal('modal-export-preview');
+  fetch(previewUrl.toString(), { headers: { 'Accept': 'application/json' } })
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(data => {
+      title.textContent = data.title || fallbackTitle || 'Export Preview';
+      dl.href = data.download_url || url;
+      const columns = data.columns || [];
+      const rows = data.rows || [];
+      const head = columns.map(c => '<th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--ink-100);font-size:11px;white-space:nowrap">' + epEsc(c) + '</th>').join('');
+      const bodyRows = rows.length
+        ? rows.map(row => '<tr>' + row.map(cell => '<td style="padding:8px 10px;border-bottom:1px solid var(--ink-50);font-size:12px;vertical-align:top;white-space:nowrap">' + epEsc(cell || '-') + '</td>').join('') + '</tr>').join('')
+        : '<tr><td colspan="' + Math.max(columns.length, 1) + '" style="padding:28px;text-align:center;color:var(--ink-300)">No records to export.</td></tr>';
+      exportPreviewHtml =
+        '<h2 style="font-family:Arial,sans-serif;margin:0 0 10px">' + epEsc(data.title || fallbackTitle || 'Export Preview') + '</h2>' +
+        '<p style="font-family:Arial,sans-serif;margin:0 0 14px;color:#555">Showing ' + epEsc(data.preview_count || rows.length) + ' of ' + epEsc(data.total ?? rows.length) + ' record(s).</p>' +
+        '<table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:12px"><thead><tr>' + head + '</tr></thead><tbody>' + bodyRows + '</tbody></table>';
+      body.innerHTML =
+        '<div style="font-size:13px;color:var(--ink-500);margin-bottom:12px">Previewing ' + epEsc(data.preview_count || rows.length) + ' of ' + epEsc(data.total ?? rows.length) + ' record(s). Review the sample below before downloading.</div>' +
+        '<div class="tbl-wrap" style="border:1px solid var(--ink-100);border-radius:var(--r-md);max-height:48vh;overflow:auto"><table><thead><tr>' + head + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div>';
+    })
+    .catch(() => {
+      exportPreviewHtml = '';
+      body.innerHTML = '<div style="text-align:center;padding:36px;color:var(--ink-400)">Preview unavailable. You can still download the CSV export.</div>';
+      dl.href = url;
+    });
 }
-// Close when clicking outside
-document.addEventListener('click', function(e) {
-  const wrap = document.getElementById('notif-wrap');
-  if (wrap && !wrap.contains(e.target)) closeNotif();
-});
-// Close on Escape
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeNotif();
-});
-</script>
+function printExportPreview() {
+  if (!exportPreviewHtml) return showToast('Preview is still loading.', 'error');
+  const w = window.open('', '_blank', 'width=1000,height=800');
+  if (!w) return showToast('Allow pop-ups to print or save PDF.', 'error');
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Export Preview</title><style>@page{margin:16mm}body{font-family:Arial,sans-serif;color:#111}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}th{background:#f3f4f6}</style></head><body>' + exportPreviewHtml + '</body></html>');
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 400);
+}
 
+/* ── liveFilter: instant AJAX search/filter for list pages ──────────────────
+   Wires a filter <form> + result container so typing/selecting refreshes the
+   results in place (debounced text input, immediate on select change) instead
+   of a full page reload via a Filter/Search submit button. */
+function liveFilter(opts) {
+  const form = document.querySelector(opts.form);
+  const result = document.querySelector(opts.result);
+  if (!form || !result) return null;
+  let timer;
+  const debounceMs = opts.debounceMs || 300;
+  const pageParam = opts.pageParam || 'pg';
+
+  function buildParams(overrides) {
+    const params = new URLSearchParams(new FormData(form));
+    if (overrides) Object.keys(overrides).forEach(k => {
+      if (overrides[k] === null || overrides[k] === '') params.delete(k);
+      else params.set(k, overrides[k]);
+    });
+    return params;
+  }
+  function applyToForm(overrides) {
+    if (!overrides) return;
+    Object.keys(overrides).forEach(k => {
+      const el = form.elements.namedItem(k);
+      if (el) el.value = overrides[k];
+    });
+  }
+  function refresh(overrides) {
+    applyToForm(overrides);
+    const params = buildParams(overrides);
+    result.style.opacity = '0.45';
+    fetch(opts.endpoint + '?' + params.toString())
+      .then(r => r.text())
+      .then(html => {
+        result.innerHTML = html;
+        result.style.opacity = '';
+        const url = new URL(window.location.href);
+        url.search = params.toString();
+        history.replaceState(null, '', url);
+        if (opts.afterRender) opts.afterRender();
+      })
+      .catch(() => { result.style.opacity = ''; showToast('Search failed. Try again.', 'error'); });
+  }
+
+  form.addEventListener('submit', e => e.preventDefault());
+  form.querySelectorAll('input[type="search"], input[type="text"]').forEach(el => {
+    el.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => refresh({ [pageParam]: 1 }), debounceMs); });
+  });
+  form.querySelectorAll('select').forEach(el => {
+    el.addEventListener('change', () => refresh({ [pageParam]: 1 }));
+  });
+
+  function handleNavClick(e) {
+    const a = e.target.closest('a[data-lf]');
+    if (!a) return;
+    e.preventDefault();
+    const u = new URL(a.href, window.location.href);
+    const overrides = {};
+    u.searchParams.forEach((v, k) => { overrides[k] = v; });
+    if (!(pageParam in overrides)) overrides[pageParam] = 1;
+    const nav = a.closest('[data-lf-group]');
+    if (nav) nav.querySelectorAll('a').forEach(x => x.classList.remove('active'));
+    a.classList.add('active');
+    refresh(overrides);
+  }
+  result.addEventListener('click', handleNavClick);
+  if (opts.navSelectors) opts.navSelectors.forEach(sel => {
+    document.querySelectorAll(sel).forEach(el => el.addEventListener('click', handleNavClick));
+  });
+
+  if (opts.clearBtn) {
+    const btn = document.querySelector(opts.clearBtn);
+    if (btn) btn.addEventListener('click', e => {
+      e.preventDefault();
+      form.querySelectorAll('input[type="search"],input[type="text"]').forEach(el => el.value = '');
+      form.querySelectorAll('select').forEach(el => el.selectedIndex = 0);
+      const resetOverrides = Object.assign({}, opts.resetOverrides || {}, { [pageParam]: 1 });
+      refresh(resetOverrides);
+    });
+  }
+
+  return { refresh };
+}
+
+// ══════════════════════════════════════════════════════════════
+// Notification bell — live insights (non-dismissible) + discrete
+// stored notifications (read/unread, read more, delete, routing)
+// ══════════════════════════════════════════════════════════════
+const INSIGHT_ICONS = {
+  user:'👤', officer:'🧑‍💼', alert:'🚨', bgy:'🏘️', warning:'⚠️', doc:'📄',
+};
+
+let sanotifOpen = false;
+let sanotifOffset = 0;
+const SANOTIF_PAGE = 8;
+
+function saEsc(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function toggleNotifDropdown() {
+  sanotifOpen = !sanotifOpen;
+  document.getElementById('notif-dropdown').classList.toggle('open', sanotifOpen);
+  if (sanotifOpen) loadNotifDropdown(true);
+}
+document.addEventListener('click', function (e) {
+  const wrap = document.querySelector('.notif-bell-wrap');
+  if (sanotifOpen && wrap && !wrap.contains(e.target)) {
+    sanotifOpen = false;
+    document.getElementById('notif-dropdown').classList.remove('open');
+  }
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && sanotifOpen) {
+    sanotifOpen = false;
+    document.getElementById('notif-dropdown').classList.remove('open');
+  }
+});
+
+function notifTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr.replace(' ', 'T'));
+  const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (diff < 5) return 'Just now';
+  if (diff < 60) return diff + 's ago';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+  return d.toLocaleDateString('en-PH', { month:'short', day:'numeric' });
+}
+
+function notifFullTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr.replace(' ', 'T'));
+  return d.toLocaleString('en-PH', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+}
+
+function refreshNotifBadge() {
+  fetch('ajax/notifications_action.php?action=count')
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) return;
+      const badge = document.getElementById('notif-bell-badge');
+      if (d.unread > 0) { badge.textContent = d.unread > 99 ? '99+' : d.unread; badge.style.display = ''; }
+      else badge.style.display = 'none';
+    }).catch(() => {});
+}
+
+function loadNotifDropdown(reset) {
+  if (reset) sanotifOffset = 0;
+  const list = document.getElementById('notif-dropdown-list');
+  fetch('ajax/notifications_action.php?action=list&offset=' + sanotifOffset + '&limit=' + SANOTIF_PAGE)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) return;
+      if (reset) list.innerHTML = '';
+      const existingMore = document.getElementById('sanotif-load-more');
+      if (existingMore) existingMore.remove();
+
+      if (reset && d.insights && d.insights.length) {
+        let html = '<div class="notif-section-lbl">Needs Attention</div>';
+        d.insights.forEach(function (n) {
+          html += '<a class="notif-item insight" href="' + n.link + '" onclick="sanotifOpen=false;document.getElementById(\'notif-dropdown\').classList.remove(\'open\')">' +
+            '<div class="notif-item-icon" style="color:' + n.color + '">' + (INSIGHT_ICONS[n.icon] || '📄') + '</div>' +
+            '<div class="notif-item-body"><div class="notif-item-subject">' + saEsc(n.title) + '</div><div class="notif-item-msg">' + saEsc(n.sub) + '</div></div>' +
+            '</a>';
+        });
+        list.insertAdjacentHTML('beforeend', html);
+      }
+
+      if (reset && (!d.notifications.length) && (!d.insights || !d.insights.length)) {
+        list.insertAdjacentHTML('beforeend', '<div class="notif-dd-empty">All caught up! No notifications right now.</div>');
+      }
+
+      if (d.notifications.length) {
+        if (reset) list.insertAdjacentHTML('beforeend', '<div class="notif-section-lbl">Recent Notifications</div>');
+        d.notifications.forEach(function (n) { list.insertAdjacentHTML('beforeend', renderSANotifItem(n)); });
+      }
+
+      sanotifOffset += d.notifications.length;
+      if (d.has_more) {
+        list.insertAdjacentHTML('beforeend', '<button type="button" id="sanotif-load-more" class="notif-load-more-btn" onclick="loadNotifDropdown(false)">Load more</button>');
+      }
+    })
+    .catch(() => { if (reset) list.innerHTML = '<div class="notif-dd-empty">Could not load notifications.</div>'; });
+}
+
+function renderSANotifItem(n) {
+  const isUnread = String(n.is_unread ?? (n.status !== 'read' ? 1 : 0)) === '1';
+  const msg = n.message || '';
+  const isLong = msg.length > 90;
+  const shortMsg = isLong ? msg.substring(0, 90) + '...' : msg;
+  const viewLink = n.link_page ? '<span class="notif-item-viewcase" onclick="goToSANotifPage(' + n.id + ',\'' + n.link_page + '\')">View -></span>' : '';
+  return `
+  <div class="notif-item ${isUnread ? 'unread' : ''}" data-id="${n.id}" data-unread="${isUnread ? '1' : '0'}">
+    <div class="notif-item-body">
+      <div class="notif-item-subject" onclick="markSANotifRead(${n.id})">${saEsc(n.subject || 'Notice')}</div>
+      <div class="notif-item-msg">
+        <span class="notif-msg-text" data-full="${saEsc(msg)}" data-short="${saEsc(shortMsg)}">${saEsc(shortMsg)}</span>
+        ${isLong ? `<span class="notif-item-readmore" onclick="toggleSAReadMore(this, ${n.id})">Read more</span>` : ''}
+      </div>
+      <div class="notif-item-foot">
+        <span class="notif-item-time" title="${saEsc(notifFullTime(n.created_at))}">${n.case_number ? saEsc(n.case_number) + ' - ' : ''}${notifTimeAgo(n.created_at)}</span>
+        <span class="notif-item-actions">
+          ${viewLink}
+          <span class="notif-read-toggle" onclick="toggleSANotifRead(${n.id})">${isUnread ? 'Mark read' : 'Mark unread'}</span>
+        </span>
+      </div>
+    </div>
+    <button type="button" class="notif-item-del" onclick="deleteSANotif(event, ${n.id})" title="Delete notification">x</button>
+  </div>`;
+}
+
+function toggleSAReadMore(el, id) {
+  const msgSpan = el.previousElementSibling;
+  const expanded = el.dataset.expanded === '1';
+  msgSpan.textContent = expanded ? msgSpan.dataset.short : msgSpan.dataset.full;
+  el.textContent = expanded ? 'Read more' : 'Show less';
+  el.dataset.expanded = expanded ? '0' : '1';
+  markSANotifRead(id);
+}
+
+function setSANotifReadState(id, isUnread) {
+  const el = document.querySelector('.notif-item[data-id="' + id + '"]');
+  if (!el) return;
+  el.classList.toggle('unread', isUnread);
+  el.dataset.unread = isUnread ? '1' : '0';
+  const toggle = el.querySelector('.notif-read-toggle');
+  if (toggle) toggle.textContent = isUnread ? 'Mark read' : 'Mark unread';
+}
+
+function markSANotifRead(id) {
+  const el = document.querySelector('.notif-item[data-id="' + id + '"]');
+  if (!el || el.dataset.unread !== '1') return;
+  setSANotifReadState(id, false);
+  fetch('ajax/notifications_action.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'mark_read', id }) })
+    .then(() => refreshNotifBadge()).catch(() => { setSANotifReadState(id, true); showToast('Could not mark as read.', 'error'); });
+}
+
+function markSANotifUnread(id) {
+  const el = document.querySelector('.notif-item[data-id="' + id + '"]');
+  if (!el || el.dataset.unread === '1') return;
+  setSANotifReadState(id, true);
+  fetch('ajax/notifications_action.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'mark_unread', id }) })
+    .then(() => refreshNotifBadge()).catch(() => { setSANotifReadState(id, false); showToast('Could not mark as unread.', 'error'); });
+}
+
+function toggleSANotifRead(id) {
+  const el = document.querySelector('.notif-item[data-id="' + id + '"]');
+  if (!el) return;
+  if (el.dataset.unread === '1') markSANotifRead(id);
+  else markSANotifUnread(id);
+}
+
+function markAllNotifRead() {
+  fetch('ajax/notifications_action.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'mark_all_read' }) })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) return;
+      document.querySelectorAll('.notif-item:not(.insight)').forEach(el => { el.classList.remove('unread'); el.dataset.unread = '0'; const t = el.querySelector('.notif-read-toggle'); if (t) t.textContent = 'Mark unread'; });
+      refreshNotifBadge();
+      showToast('All notifications marked as read.', 'success');
+    }).catch(() => {});
+}
+
+function deleteSANotif(evt, id) {
+  evt.stopPropagation();
+  if (!confirm('Delete this notification? This cannot be undone.')) return;
+  fetch('ajax/notifications_action.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id }) })
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) {
+        const el = document.querySelector('.notif-item[data-id="' + id + '"]');
+        if (el) el.remove();
+        refreshNotifBadge();
+        const list = document.getElementById('notif-dropdown-list');
+        if (list && !list.querySelector('.notif-item:not(.insight)') && !list.querySelector('.notif-item.insight')) {
+          list.innerHTML = '<div class="notif-dd-empty">All caught up! No notifications right now.</div>';
+        }
+      } else showToast(d.message, 'error');
+    }).catch(() => showToast('Request failed.', 'error'));
+}
+
+function goToSANotifPage(id, page) {
+  markSANotifRead(id);
+  window.location.href = '?page=' + page;
+}
+
+refreshNotifBadge();
+setInterval(refreshNotifBadge, 60000);
+</script>
+<div class="sb-overlay" onclick="toggleSidebar()"></div>
+<script>
+function toggleSidebar(){
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.querySelector('.sb-overlay').classList.toggle('show');
+}
+</script>
 </body>
 </html>

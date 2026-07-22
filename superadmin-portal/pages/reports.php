@@ -328,6 +328,7 @@ function aj($v) { return json_encode($v, JSON_NUMERIC_CHECK); }
 @media(max-width:768px){.an-kpi-grid{grid-template-columns:1fr 1fr}.an-row-2{grid-template-columns:1fr}}
 </style>
 
+<div id="analytics-live-region">
 <div class="page-hdr">
   <div class="page-hdr-left">
     <h2>Analytics Engine</h2>
@@ -344,13 +345,13 @@ function aj($v) { return json_encode($v, JSON_NUMERIC_CHECK); }
 <form method="GET" class="an-filter-bar">
   <input type="hidden" name="page" value="analytics">
   <label style="font-size:11px;font-weight:600;color:var(--ink-500);white-space:nowrap">Period</label>
-  <select name="months" onchange="this.form.submit()" style="width:auto;min-width:130px">
+  <select name="months" style="width:auto;min-width:130px">
     <option value="6"  <?= $f_months===6  ?'selected':'' ?>>Last 6 Months</option>
     <option value="12" <?= $f_months===12 ?'selected':'' ?>>Last 12 Months</option>
     <option value="24" <?= $f_months===24 ?'selected':'' ?>>Last 24 Months</option>
   </select>
   <label style="font-size:11px;font-weight:600;color:var(--ink-500);white-space:nowrap">Level</label>
-  <select name="level" onchange="this.form.submit()" style="width:auto;min-width:130px">
+  <select name="level" style="width:auto;min-width:130px">
     <option value="" <?= $f_level==='' ?'selected':'' ?>>All Levels</option>
     <option value="critical" <?= $f_level==='critical'?'selected':'' ?>>Critical</option>
     <option value="serious"  <?= $f_level==='serious' ?'selected':'' ?>>Serious</option>
@@ -358,7 +359,7 @@ function aj($v) { return json_encode($v, JSON_NUMERIC_CHECK); }
     <option value="minor"    <?= $f_level==='minor'   ?'selected':'' ?>>Minor</option>
   </select>
   <label style="font-size:11px;font-weight:600;color:var(--ink-500);white-space:nowrap">Type</label>
-  <select name="type" onchange="this.form.submit()" style="width:auto;min-width:170px">
+  <select name="type" style="width:auto;min-width:170px">
     <option value="">All Incident Types</option>
     <?php foreach ($all_types as $t): ?>
     <option value="<?= e($t) ?>" <?= $f_type===$t?'selected':'' ?>><?= e($t) ?></option>
@@ -645,3 +646,91 @@ new Chart(document.getElementById('ch-bgy-risk'),{
 })();
 </script>
 <?php endif; ?>
+</div>
+
+<script>
+(function(){
+  var analyticsAbort = null;
+
+  function runRegionScripts(region) {
+    var scripts = Array.prototype.slice.call(region.querySelectorAll('script'));
+    return scripts.reduce(function(chain, oldScript) {
+      return chain.then(function() {
+        return new Promise(function(resolve) {
+          if (oldScript.src && oldScript.src.indexOf('Chart.js') !== -1 && window.Chart) {
+            resolve();
+            return;
+          }
+          var script = document.createElement('script');
+          Array.prototype.slice.call(oldScript.attributes).forEach(function(attr) {
+            script.setAttribute(attr.name, attr.value);
+          });
+          if (oldScript.src) {
+            script.onload = resolve;
+            script.onerror = resolve;
+          } else {
+            script.textContent = oldScript.textContent;
+          }
+          document.body.appendChild(script);
+          if (!oldScript.src) resolve();
+        });
+      });
+    }, Promise.resolve());
+  }
+
+  function loadAnalytics(url, pushState) {
+    var region = document.getElementById('analytics-live-region');
+    if (!region) {
+      window.location.href = url;
+      return;
+    }
+    if (analyticsAbort) analyticsAbort.abort();
+    analyticsAbort = new AbortController();
+    region.style.opacity = '0.45';
+    fetch(url, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      signal: analyticsAbort.signal
+    })
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function(html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var next = doc.getElementById('analytics-live-region');
+        if (!next) {
+          window.location.href = url;
+          return;
+        }
+        region.replaceWith(next);
+        if (pushState) history.pushState(null, '', url);
+        runRegionScripts(next);
+      })
+      .catch(function(err) {
+        region.style.opacity = '';
+        if (err.name === 'AbortError') return;
+        showToast('Analytics filters failed. Please try again.', 'error');
+      });
+  }
+
+  document.addEventListener('change', function(e) {
+    var form = e.target.closest('#analytics-live-region .an-filter-bar');
+    if (!form) return;
+    var params = new URLSearchParams(new FormData(form));
+    loadAnalytics('?' + params.toString(), true);
+  });
+
+  document.addEventListener('click', function(e) {
+    var clear = e.target.closest('#analytics-live-region .an-filter-bar a[href*="page=analytics"]');
+    if (!clear) return;
+    e.preventDefault();
+    loadAnalytics(clear.href, true);
+  });
+
+  window.addEventListener('popstate', function() {
+    if ((location.search || '').indexOf('page=analytics') !== -1) {
+      loadAnalytics(location.href, false);
+    }
+  });
+})();
+</script>

@@ -4,22 +4,27 @@
  * ─────────────────────────────────────────────────────────────
  * Community user self-registration.
  * After registration, the account is set to inactive (is_active = 0)
- * and must be approved by the barangay officer before login.
+ * and a verification link is emailed to the address provided. The
+ * account is auto-activated the moment that link is clicked
+ * (verify_email.php) — no barangay officer approval step required.
  *
  * GET  → show registration form
- * POST → validate, insert user, redirect to login with success message
+ * POST → validate, insert user, email verification link, show "check your email"
  * ─────────────────────────────────────────────────────────────
  */
 
 require_once 'connect.php';
+require_once 'email_verification.php';
 
 // Already logged in?
 if (isLoggedIn()) {
     redirectByRole($_SESSION['user_role']);
 }
 
-$errors  = [];
-$success = '';
+$errors     = [];
+$success    = '';   // first name, set on successful registration
+$mail_sent  = false;
+$reg_email  = '';
 
 // ── Fetch list of barangays from barangay_name table ─────────
 $barangays = [];
@@ -103,8 +108,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $birth_date, $barangay_id
             ]);
 
-            // Show in-page success / pending approval screen
-            $success = $first_name;
+            $new_user_id = (int)$pdo->lastInsertId();
+            $mail_sent   = issueVerificationEmail($pdo, $new_user_id, $email, $first_name);
+
+            // Notify superadmins that a new account is awaiting verification/approval
+            try {
+                $admins = $pdo->query("SELECT id FROM users WHERE role='superadmin'")->fetchAll(PDO::FETCH_COLUMN);
+                $notif_stmt = $pdo->prepare("
+                    INSERT INTO system_notifications
+                      (recipient_user_id, portal, type, subject, message, link_page, status, created_at)
+                    VALUES (?, 'superadmin', 'new_registration', ?, ?, 'users', 'unread', NOW())
+                ");
+                $notif_subject = "New account pending — $full_name";
+                $notif_message = "$full_name registered as a community user and is awaiting email verification / approval.";
+                foreach ($admins as $admin_id) {
+                    $notif_stmt->execute([$admin_id, $notif_subject, $notif_message]);
+                }
+            } catch (PDOException $ex) { error_log('[register notify superadmins] ' . $ex->getMessage()); }
+
+            // Show in-page "check your email" screen
+            $success   = $first_name;
+            $reg_email = $email;
 
         } catch (PDOException $e) {
             error_log('[VOICE2 Register] Insert error: ' . $e->getMessage());
@@ -115,10 +139,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 function redirectByRole(string $role): void {
     switch ($role) {
-        case 'community':  redirect('../community-portal/index.html'); break;
-        case 'barangay':   redirect('../barangay-portal/index.html');  break;
-        case 'superadmin': redirect('../superadmin-portal/index.html'); break;
-        default:           redirect('../index.html');
+        case 'community':  redirect('../community-portal/index.php'); break;
+        case 'barangay':   redirect('../barangay-portal/index.php');  break;
+        case 'superadmin': redirect('../superadmin-portal/index.php'); break;
+        default:           redirect('../index.php');
     }
 }
 ?>
@@ -149,6 +173,16 @@ function redirectByRole(string $role): void {
       color: #fff; padding: 40px 28px; display: flex;
       flex-direction: column; justify-content: space-between;
     }
+    .brand-link { display: inline-block; color: inherit; text-decoration: none; margin-bottom: 22px; transition: opacity 0.12s; }
+    .brand-link:hover { opacity: 0.86; }
+    .brand-logo { display: inline-flex; align-items: center; gap: 12px; }
+    .brand-logo-mark {
+      width: 40px; height: 40px; border-radius: 8px; background: #fff;
+      color: var(--blue-800); display: flex; align-items: center; justify-content: center;
+      font-family: 'DM Serif Display', serif; font-size: 23px; font-weight: 700;
+    }
+    .brand-logo-title { font-family: 'DM Serif Display', serif; font-size: 24px; line-height: 1; color: #fff; }
+    .brand-logo-sub { font-size: 10px; color: rgba(255,255,255,0.55); letter-spacing: 0.12em; text-transform: uppercase; margin-top: 4px; }
     .brand-eye { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--blue-400); margin-bottom: 10px; }
     .brand-name { font-family: 'DM Serif Display', serif; font-size: 26px; line-height: 1.25; color: #fff; font-style: italic; }
     .brand-note { font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 14px; line-height: 1.7; }
@@ -238,18 +272,27 @@ function redirectByRole(string $role): void {
   <!-- Left Panel -->
   <div class="left-panel">
     <div>
+      <a href="../index.php" class="brand-link" aria-label="Go back to VOICE landing page">
+        <div class="brand-logo">
+          <div class="brand-logo-mark">V</div>
+          <div>
+            <div class="brand-logo-title">VOICE</div>
+            <div class="brand-logo-sub">Siniloan, Laguna</div>
+          </div>
+        </div>
+      </a>
       <div class="brand-eye">VOICE2 System</div>
       <div class="brand-name">Community<br>Registration</div>
       <div class="brand-note">Create your account to report incidents, track your cases, and receive barangay notifications.</div>
       <ul class="steps-list">
         <li class="step"><div class="step-num">1</div>Fill out the form with your accurate information.</li>
-        <li class="step"><div class="step-num">2</div>Your account will be reviewed by your barangay officer.</li>
-        <li class="step"><div class="step-num">3</div>You'll be notified once your account is approved and active.</li>
+        <li class="step"><div class="step-num">2</div>We'll email you a verification link.</li>
+        <li class="step"><div class="step-num">3</div>Click it and your account activates instantly.</li>
       </ul>
     </div>
     <div style="display:flex;flex-direction:column;gap:6px">
       <a href="login.php" class="left-link">← Already have an account? Sign in</a>
-      <a href="../index.html" class="left-link">Back to Home</a>
+      <a href="../index.php" class="left-link">Back to Home</a>
     </div>
   </div>
 
@@ -257,20 +300,25 @@ function redirectByRole(string $role): void {
   <div class="right-panel">
 
   <?php if ($success): ?>
-  <!-- ══ PENDING APPROVAL SCREEN ══ -->
+  <!-- ══ CHECK YOUR EMAIL SCREEN ══ -->
   <div class="pending-wrap">
     <div class="pending-icon">
-      <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-        <circle cx="20" cy="20" r="18" stroke="var(--blue-200)" stroke-width="3"/>
-        <path d="M20 11v10l6 3.5" stroke="var(--blue-600)" stroke-width="2.5" stroke-linecap="round"/>
-      </svg>
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="var(--blue-600)" stroke-width="2.2" stroke-linecap="round"><rect x="4" y="9" width="32" height="24" rx="3"/><path d="M5 11l15 11 15-11"/></svg>
     </div>
-    <h2 class="pending-title">You're registered!</h2>
+    <h2 class="pending-title">Check your email!</h2>
     <p class="pending-name">Welcome, <strong><?= e($success) ?></strong> 👋</p>
     <p class="pending-msg">
-      Your account has been created and is now <strong>waiting for barangay approval</strong>.
-      You cannot log in until your information has been verified by a barangay officer.
+      We've sent a verification link to <strong><?= e($reg_email) ?></strong>.
+      Click it to activate your account — <strong>no barangay approval needed</strong>,
+      you'll be able to log in the moment you verify.
     </p>
+
+    <?php if (!$mail_sent): ?>
+    <div class="pending-notice" style="background:var(--rose-50);border-color:#f7c1c1;color:var(--rose-600)">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;margin-top:2px"><circle cx="7" cy="7" r="5.5"/><path d="M7 4.5v3"/><circle cx="7" cy="9.5" r=".5" fill="currentColor"/></svg>
+      <span>We couldn't send the email just now (mail server issue). Your account was still created — use "Resend verification email" below in a moment, or visit your barangay hall for manual activation.</span>
+    </div>
+    <?php endif; ?>
 
     <div class="pending-steps">
       <div class="ps-item">
@@ -286,8 +334,8 @@ function redirectByRole(string $role): void {
       <div class="ps-item">
         <div class="ps-dot ps-dot-active"></div>
         <div class="ps-text">
-          <div class="ps-lbl">Pending barangay review</div>
-          <div class="ps-sub">Your barangay officer will verify your details</div>
+          <div class="ps-lbl">Verify your email</div>
+          <div class="ps-sub">Open the link we just sent you</div>
         </div>
       </div>
       <div class="ps-line"></div>
@@ -295,15 +343,22 @@ function redirectByRole(string $role): void {
         <div class="ps-dot ps-dot-empty"></div>
         <div class="ps-text">
           <div class="ps-lbl">Account activated</div>
-          <div class="ps-sub">You'll receive access once approved</div>
+          <div class="ps-sub">Instant — log in right after verifying</div>
         </div>
       </div>
     </div>
 
     <div class="pending-notice">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--blue-600)" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;margin-top:2px"><circle cx="7" cy="7" r="5.5"/><path d="M7 4.5v3"/><circle cx="7" cy="9.5" r=".5" fill="var(--blue-600)"/></svg>
-      <span>Approval usually takes <strong>1–2 business days</strong>. Visit your barangay hall if you have questions.</span>
+      <span>Don't see it? Check your <strong>spam/junk folder</strong>. The link expires in 24 hours.</span>
     </div>
+
+    <form method="POST" action="resend_verification.php" style="width:100%;max-width:360px;margin-bottom:14px">
+      <input type="hidden" name="email" value="<?= e($reg_email) ?>">
+      <button type="submit" class="btn-back-login" style="width:100%;background:none;color:var(--blue-600);border:1px solid var(--gray-200);cursor:pointer;font-family:inherit;font-size:13px">
+        Resend Verification Email
+      </button>
+    </form>
 
     <a href="login.php" class="btn-back-login">← Back to Login</a>
   </div>
@@ -314,7 +369,7 @@ function redirectByRole(string $role): void {
     <div class="form-subtitle">Community member registration · All fields marked <span style="color:var(--rose-400)">*</span> are required</div>
 
     <div class="notice-box">
-      ℹ️ Your account will be <strong>pending approval</strong> after registration. The barangay officer will verify your information before you can log in.
+      ℹ️ After registering, we'll email you a <strong>verification link</strong>. Click it to activate your account instantly — no barangay approval needed.
     </div>
 
     <?php if (!empty($errors)): ?>

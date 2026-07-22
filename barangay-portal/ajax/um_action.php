@@ -37,7 +37,7 @@ if ($action === 'get_user' && $user_id > 0) {
         echo json_encode(['success'=>true,'user'=>$u]);
     } catch (PDOException $e) {
         error_log('um_action get_user: ' . $e->getMessage());
-        echo json_encode(['success'=>false,'message'=>'Database error: ' . $e->getMessage()]);
+        echo json_encode(['success'=>false,'message'=>'Could not load the user. Please try again.']);
     }
     exit;
 }

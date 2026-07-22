@@ -8,11 +8,22 @@ guardRole('superadmin');
 
 $bgy_id = (int)($_GET['barangay'] ?? 0);
 $year   = (int)($_GET['year']     ?? date('Y'));
+$is_preview = isset($_GET['preview']);
 
 $bgy_w  = $bgy_id ? "AND bl.barangay_id = $bgy_id" : '';
 $year_w = "AND YEAR(bl.created_at) = $year";
 
 try {
+    $total = null;
+    if ($is_preview) {
+        $total = (int)$pdo->query("
+            SELECT COUNT(*)
+            FROM blotters bl
+            JOIN barangays bg ON bg.id = bl.barangay_id
+            WHERE 1=1 $bgy_w $year_w
+        ")->fetchColumn();
+    }
+    $limit = $is_preview ? ' LIMIT 25' : '';
     $rows = $pdo->query("
         SELECT bl.case_number, bg.name as barangay, bl.complainant_name, bl.respondent_name,
                bl.incident_type, bl.violation_level, bl.prescribed_action, bl.status,
@@ -20,16 +31,32 @@ try {
         FROM blotters bl
         JOIN barangays bg ON bg.id = bl.barangay_id
         WHERE 1=1 $bgy_w $year_w
-        ORDER BY bl.created_at DESC
+        ORDER BY bl.created_at DESC$limit
     ")->fetchAll();
 } catch(PDOException $e) { die('Export failed.'); }
+
+$columns = ['Case No.','Barangay','Complainant','Respondent','Incident Type','Level','Prescribed Action','Status','Incident Date','Filed Date'];
+if ($is_preview) {
+    $download = $_GET;
+    unset($download['preview']);
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode([
+        'title' => 'Blotter Report Export',
+        'total' => $total,
+        'preview_count' => count($rows),
+        'columns' => $columns,
+        'rows' => array_map(fn($r) => [$r['case_number'],$r['barangay'],$r['complainant_name'],$r['respondent_name'],$r['incident_type'],$r['violation_level'],$r['prescribed_action'],$r['status'],$r['incident_date'],$r['created_at']], $rows),
+        'download_url' => 'ajax/export_report.php?' . http_build_query($download),
+    ]);
+    exit;
+}
 
 $filename = 'blotter_report_'.$year.'_'.date('Ymd').'.csv';
 header('Content-Type: text/csv');
 header('Content-Disposition: attachment; filename="'.$filename.'"');
 
 $fp = fopen('php://output','w');
-fputcsv($fp, ['Case No.','Barangay','Complainant','Respondent','Incident Type','Level','Prescribed Action','Status','Incident Date','Filed Date']);
+fputcsv($fp, $columns);
 foreach ($rows as $r) {
     fputcsv($fp, [$r['case_number'],$r['barangay'],$r['complainant_name'],$r['respondent_name'],$r['incident_type'],$r['violation_level'],$r['prescribed_action'],$r['status'],$r['incident_date'],$r['created_at']]);
 }

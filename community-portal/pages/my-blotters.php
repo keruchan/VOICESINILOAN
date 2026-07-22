@@ -20,7 +20,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'blotter_detail' && isset($_GET['i
 
         echo json_encode(['ok' => true, 'data' => $row]);
     } catch (PDOException $e) {
-        echo json_encode(['error' => $e->getMessage()]);
+        error_log('my-blotters.php blotter_detail: ' . $e->getMessage());
+        echo json_encode(['error' => 'Could not load the case. Please try again.']);
     }
     exit;
 }
@@ -28,25 +29,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'blotter_detail' && isset($_GET['i
 $uid = (int)$user['id'];
 $f_status = $_GET['status'] ?? '';
 $f_search = $_GET['search'] ?? '';
-$pg = max(1, (int)($_GET['pg'] ?? 1));
-$per = 15; $off = ($pg - 1) * $per;
-
-$where = ["complainant_user_id = $uid"]; $params = [];
-if ($f_status) { $where[] = 'status = ?'; $params[] = $f_status; }
-if ($f_search) {
-    $where[] = '(case_number LIKE ? OR incident_type LIKE ? OR respondent_name LIKE ?)';
-    $like = "%$f_search%"; $params = array_merge($params, [$like,$like,$like]);
-}
-$ws = 'WHERE ' . implode(' AND ', $where);
-
-$blotters = []; $total = 0;
-try {
-    $c = $pdo->prepare("SELECT COUNT(*) FROM blotters $ws"); $c->execute($params); $total = (int)$c->fetchColumn();
-    $s = $pdo->prepare("SELECT * FROM blotters $ws ORDER BY created_at DESC LIMIT ? OFFSET ?");
-    $s->execute(array_merge($params, [$per, $off]));
-    $blotters = $s->fetchAll();
-} catch (PDOException $e) {}
-$total_pages = max(1, (int)ceil($total / $per));
 
 // Tab counts
 $tcounts = [];
@@ -60,8 +42,6 @@ function mbq(array $o = []): string {
     $b = array_filter(['page'=>'my-blotters','status'=>$_GET['status']??'','search'=>$_GET['search']??''], fn($v)=>$v!=='');
     return '?' . http_build_query(array_merge($b, $o));
 }
-$lm = ['minor'=>'ch-green','moderate'=>'ch-amber','serious'=>'ch-rose','critical'=>'ch-violet'];
-$sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-navy','resolved'=>'ch-green','closed'=>'ch-slate','escalated'=>'ch-rose','transferred'=>'ch-slate'];
 ?>
 
 <div class="page-hdr">
@@ -69,62 +49,31 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
   <a href="?page=file-report" class="btn btn-primary">+ File New Report</a>
 </div>
 
-<div class="tab-bar" style="margin-bottom:0;border-bottom:none">
+<div class="tab-bar" style="margin-bottom:0;border-bottom:none" data-lf-group>
   <?php
   $tabs = ['' => 'All', 'pending_review' => 'Pending', 'active' => 'Active', 'mediation_set' => 'Mediation Set', 'resolved' => 'Resolved', 'closed' => 'Closed'];
   foreach ($tabs as $val => $lbl):
     $cnt = $val === '' ? ($tcounts['all']??0) : ($tcounts[$val]??0);
   ?>
-  <a class="tab-item <?= $f_status===$val?'active':'' ?>" href="<?= mbq(['status'=>$val,'pg'=>1]) ?>">
+  <a class="tab-item <?= $f_status===$val?'active':'' ?>" data-lf href="<?= mbq(['status'=>$val,'pg'=>1]) ?>">
     <?= $lbl ?><?php if ($cnt): ?> <span style="font-size:10px;background:var(--surface-2);padding:0 6px;border-radius:10px;margin-left:3px"><?= $cnt ?></span><?php endif; ?>
   </a>
   <?php endforeach; ?>
 </div>
 <div style="height:1px;background:var(--ink-100);margin-bottom:14px"></div>
 
-<form method="GET" class="filter-bar">
+<form id="mb-form" class="filter-bar" onsubmit="return false">
   <input type="hidden" name="page" value="my-blotters">
-  <?php if ($f_status): ?><input type="hidden" name="status" value="<?= e($f_status) ?>"><?php endif; ?>
+  <input type="hidden" name="status" value="<?= e($f_status) ?>">
   <div class="inp-icon" style="flex:1;max-width:280px">
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="6" cy="6" r="4"/><path d="M11 11l-2.5-2.5"/></svg>
     <input type="search" name="search" placeholder="Case no., type, respondent…" value="<?= e($f_search) ?>">
   </div>
-  <button type="submit" class="btn btn-outline btn-sm">Search</button>
-  <a href="?page=my-blotters" class="btn btn-ghost btn-sm">Clear</a>
+  <button type="button" id="mb-clear" class="btn btn-ghost btn-sm">✕ Clear</button>
 </form>
 
-<div class="card">
-  <div class="tbl-wrap">
-    <table>
-      <thead><tr><th>Case No.</th><th>Incident Type</th><th>Respondent</th><th>Level</th><th>Status</th><th>Prescribed Action</th><th>Filed</th><th></th></tr></thead>
-      <tbody>
-      <?php if (empty($blotters)): ?>
-        <tr><td colspan="8"><div class="empty-state"><div class="es-icon">📋</div><div class="es-title">No reports found</div><div class="es-sub"><a href="?page=file-report" style="color:var(--green-600)">File your first report →</a></div></div></td></tr>
-      <?php else: foreach ($blotters as $b): ?>
-        <tr>
-          <td class="td-mono"><?= e($b['case_number']) ?></td>
-          <td class="td-main"><?= e($b['incident_type']) ?></td>
-          <td><?= e($b['respondent_name'] ?: '—') ?></td>
-          <!-- <td><span class="chip <?= $lm[$b['violation_level']]??'ch-slate' ?>"><?= ucfirst($b['violation_level']) ?></span></td> -->
-          <td><span class="chip <?= $sm[$b['status']]??'ch-slate' ?>"><?= ucwords(str_replace('_',' ',$b['status'])) ?></span></td>
-          <td style="font-size:12px;color:var(--ink-500)"><?= e(ucwords(str_replace('_',' ',$b['prescribed_action']??''))) ?: '—' ?></td>
-          <td style="font-size:12px;color:var(--ink-400)"><?= date('M j, Y', strtotime($b['created_at'])) ?></td>
-          <td><button class="act-btn" onclick="viewBlotter(<?= $b['id'] ?>)">View</button></td>
-        </tr>
-      <?php endforeach; endif; ?>
-      </tbody>
-    </table>
-  </div>
-  <div class="card-foot">
-    <div class="pager">
-      <span class="pager-info">Showing <?= min($off+1,$total) ?>–<?= min($off+$per,$total) ?> of <?= $total ?></span>
-      <div class="pager-btns">
-        <?php if ($pg>1): ?><a href="<?= mbq(['pg'=>$pg-1]) ?>" class="btn btn-outline btn-sm">← Prev</a><?php endif; ?>
-        <?php for ($i=max(1,$pg-2);$i<=min($total_pages,$pg+2);$i++): ?><a href="<?= mbq(['pg'=>$i]) ?>" class="btn <?= $i===$pg?'btn-primary':'btn-outline' ?> btn-sm"><?= $i ?></a><?php endfor; ?>
-        <?php if ($pg<$total_pages): ?><a href="<?= mbq(['pg'=>$pg+1]) ?>" class="btn btn-outline btn-sm">Next →</a><?php endif; ?>
-      </div>
-    </div>
-  </div>
+<div id="mb-results">
+  <?php require __DIR__ . '/partials/my-blotters-table.php'; ?>
 </div>
 
 <!-- ══════════ BLOTTER DETAIL MODAL ══════════ -->
@@ -168,34 +117,40 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
     <div id="bm-content" style="display:none;padding:20px 24px 24px">
 
       <!-- Status + Level chips -->
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+      <div class="case-view-top">
         <span id="bm-status-chip" class="chip"></span>
         <span id="bm-level-chip"  class="chip"></span>
       </div>
 
       <!-- Two-column detail grid -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;margin-bottom:18px">
-        <div><div class="bm-lbl">Incident Type</div><div id="bm-type"     class="bm-val"></div></div>
-        <div><div class="bm-lbl">Incident Date</div><div id="bm-date"     class="bm-val"></div></div>
-        <div><div class="bm-lbl">Location</div>     <div id="bm-location" class="bm-val"></div></div>
-        <div><div class="bm-lbl">Prescribed Action</div><div id="bm-action" class="bm-val"></div></div>
-        <div><div class="bm-lbl">Respondent</div>  <div id="bm-respondent" class="bm-val"></div></div>
-        <div><div class="bm-lbl">Filed On</div>    <div id="bm-filed"    class="bm-val"></div></div>
+      <div class="card mb16 case-view-card">
+        <div class="card-hdr"><span class="card-title">Case Information</span></div>
+        <div class="card-body" style="padding:12px 16px">
+          <div class="case-detail-grid" style="margin-bottom:0">
+            <div><div class="bm-lbl">Incident Type</div><div id="bm-type"     class="bm-val"></div></div>
+            <div><div class="bm-lbl">Incident Date</div><div id="bm-date"     class="bm-val"></div></div>
+            <div><div class="bm-lbl">Location</div>     <div id="bm-location" class="bm-val"></div></div>
+            <div><div class="bm-lbl">Prescribed Action</div><div id="bm-action" class="bm-val"></div></div>
+            <div><div class="bm-lbl">Respondent</div>  <div id="bm-respondent" class="bm-val"></div></div>
+            <div><div class="bm-lbl">Filed On</div>    <div id="bm-filed"    class="bm-val"></div></div>
+          </div>
+        </div>
       </div>
 
       <!-- Narrative -->
-      <div style="margin-bottom:18px">
-        <div class="bm-lbl">Narrative / Description</div>
-        <div id="bm-narrative"
-             style="font-size:13px;color:var(--ink-700);line-height:1.75;
-                    background:var(--surface-2,#f9fafb);border:1px solid var(--ink-100);
-                    border-radius:var(--r-md,8px);padding:12px 14px;white-space:pre-wrap"></div>
+      <div class="card mb16 case-view-readonly">
+        <div class="card-hdr"><span class="card-title">Narrative</span></div>
+        <div class="card-body" style="padding:12px 16px">
+          <div id="bm-narrative" class="case-view-text"></div>
+        </div>
       </div>
 
       <!-- Attachments -->
-      <div id="bm-attach-wrap" style="display:none;margin-bottom:4px">
-        <div class="bm-lbl" style="margin-bottom:8px">Attachments</div>
-        <div id="bm-attach-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      <div id="bm-attach-wrap" class="card mb16 case-view-readonly" style="display:none">
+        <div class="card-hdr"><span class="card-title">Attachments</span></div>
+        <div class="card-body" style="padding:12px 16px">
+          <div id="bm-attach-list" class="case-view-attachments"></div>
+        </div>
       </div>
 
     </div>
@@ -213,12 +168,12 @@ $sm = ['pending_review'=>'ch-amber','active'=>'ch-teal','mediation_set'=>'ch-nav
 <style>
 .bm-lbl { font-size:10px;font-weight:700;color:var(--ink-400);letter-spacing:.07em;
            text-transform:uppercase;margin-bottom:3px; }
-.bm-val { font-size:13px;color:var(--ink-800);font-weight:500;line-height:1.4; }
+.bm-val { font-size:13px;color:var(--ink-800);font-weight:500;line-height:1.4;overflow-wrap:anywhere;word-break:break-word; }
 @keyframes bm-spin { to { transform:rotate(360deg); } }
 #blotter-modal.open { display:flex; }
 .bm-thumb {
-  width:80px;height:80px;border-radius:var(--r-sm,6px);overflow:hidden;
-  border:1px solid var(--ink-100);object-fit:cover;cursor:pointer;
+  width:100%;height:88px;border-radius:var(--r-sm,6px);overflow:hidden;
+  border:1px solid var(--ink-100);object-fit:cover;cursor:pointer;background:var(--surface-2);
   transition:opacity .15s;
 }
 .bm-thumb:hover { opacity:.85; }
@@ -236,6 +191,16 @@ const STATUS_LABEL = {
   pending_review:'Pending Review', active:'Active', mediation_set:'Mediation Set',
   resolved:'Resolved', closed:'Closed', escalated:'Escalated', transferred:'Transferred'
 };
+
+document.addEventListener('DOMContentLoaded', function () {
+  liveFilter({
+    form: '#mb-form',
+    result: '#mb-results',
+    endpoint: 'ajax/my_blotters_search.php',
+    clearBtn: '#mb-clear',
+    resetOverrides: { status: '' },
+  });
+});
 
 function viewBlotter(id) {
   // Show modal in loading state
