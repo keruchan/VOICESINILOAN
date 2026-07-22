@@ -37,6 +37,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $rc    = trim($_POST['respondent_contact']  ?? '');
     $r_uid = (int)($_POST['respondent_user_id'] ?? 0);
 
+    // If the respondent is a linked registered user, always use the contact
+    // number on file for their account — never trust the (hidden/disabled)
+    // form field, so a tampered submission can't override it.
+    if ($r_uid > 0) {
+        try {
+            $ru = $pdo->prepare("SELECT contact_number FROM users WHERE id=? LIMIT 1");
+            $ru->execute([$r_uid]);
+            $rc = $ru->fetchColumn() ?: '';
+        } catch (PDOException $e) {
+            error_log("Failed to fetch registered respondent's contact number: " . $e->getMessage());
+        }
+    }
+
     // Narrative
     $narr = trim($_POST['narrative']               ?? '');
     $cn   = $user['name'] ?? '';
@@ -448,10 +461,14 @@ try {
               </div>
             </div>
 
-            <div class="fg">
+            <div class="fg" id="resp-contact-wrap">
               <label>Contact Number</label>
-              <input type="tel" name="respondent_contact" placeholder="09XXXXXXXXX"
+              <input type="tel" id="resp-contact-input" name="respondent_contact" placeholder="09XXXXXXXXX"
                      value="<?= e($_POST['respondent_contact'] ?? '') ?>">
+              <div id="resp-contact-linked-note"
+                   style="display:none;font-size:11px;color:var(--ink-400);margin-top:5px">
+                Using the contact number on their registered account.
+              </div>
             </div>
 
           </div>
@@ -1343,6 +1360,7 @@ function selectRespondent(idx) {
   document.getElementById('resp-search-input').style.display = 'none';
   respLinked = true;
   hideRespDropdown();
+  lockRespContact(true);
 }
 
 function unlinkRespondent(clearText) {
@@ -1353,6 +1371,21 @@ function unlinkRespondent(clearText) {
   if (clearText !== false) inp.value = '';
   inp.focus();
   respLinked = false;
+  lockRespContact(false);
+}
+
+// Registered respondent's contact number is looked up server-side from
+// their account — hide/disable the manual field so it's clear it isn't
+// editable, and so a disabled (non-submitted) value can't be confused
+// with what actually gets saved.
+function lockRespContact(locked) {
+  const input = document.getElementById('resp-contact-input');
+  const note  = document.getElementById('resp-contact-linked-note');
+  if (!input || !note) return;
+  input.disabled       = locked;
+  input.style.display  = locked ? 'none' : '';
+  note.style.display   = locked ? '' : 'none';
+  if (locked) input.value = '';
 }
 
 function hideRespDropdown() {
